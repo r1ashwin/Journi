@@ -1,21 +1,26 @@
 import { expect, test } from "@playwright/test";
+import { encodePlan } from "@/lib/planner";
+import type { SummaryPlan } from "@/lib/types";
 
 test("builds a Goa trip flow end-to-end", async ({ page }) => {
   await page.goto("/planner");
 
-  // ---- Setup: select Goa destination card ----
+  // ---- Step 1: destination only ----
   await expect(page.getByText("Pick your destination")).toBeVisible();
+  await expect(page.getByText("Planner setup · Step 1 of 2")).toBeVisible();
   await page.locator("button", { hasText: "Goa" }).click();
 
-  // ---- Fill trip details ----
+  // ---- Step 2: trip details (auto-advance on destination tap) ----
+  await expect(page.getByText("Your trip details")).toBeVisible();
+  await expect(page.getByText("Planner setup · Step 2 of 2")).toBeVisible();
   await page.getByLabel("Flying from").selectOption("Bengaluru");
   await page.getByLabel("Trip length (days)").fill("4");
   await page.getByLabel(/budget/i).fill("30000");
   await page.getByLabel("Travelers").fill("2");
   await page.getByRole("button", { name: /start planning/i }).click();
 
-  // ---- Destination banner visible ----
-  await expect(page.getByText("Goa at a glance")).toBeVisible();
+  // ---- Famous spots + two-column planner ----
+  await expect(page.getByText("Notable spots")).toBeVisible();
 
   // ---- Step 1: Outbound flight ----
   await expect(page.getByText("Step 1 of 4")).toBeVisible();
@@ -43,7 +48,9 @@ test("builds a Goa trip flow end-to-end", async ({ page }) => {
   await firstReturn.click();
 
   // ---- Trip complete ----
-  await expect(page.getByText("Your trip is ready")).toBeVisible();
+  await expect(page.getByText("Your trip is ready")).toBeVisible({
+    timeout: 20_000,
+  });
 
   // ---- Navigate to summary ----
   const summaryLink = page.getByRole("link", { name: /view summary/i });
@@ -52,27 +59,48 @@ test("builds a Goa trip flow end-to-end", async ({ page }) => {
 
   // ---- Summary page ----
   await expect(page.getByText("Your trip", { exact: true })).toBeVisible({ timeout: 10_000 });
-  await expect(page.getByText(/Bengaluru.*Goa/)).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: /Bengaluru.*Goa/i }),
+  ).toBeVisible();
 });
 
 test("landing page loads with carousel and destination grid", async ({
   page,
 }) => {
   await page.goto("/");
+  await expect(page.locator("main h1")).toContainText(/get live/i);
+  await expect(page.locator("main h1")).toContainText(/one place/i);
+  await expect(page.locator("main h1")).not.toContainText(/—/);
   await expect(
-    page.getByRole("heading", { name: /plan your trip/i }),
+    page.getByText(/turn trip research into a calm flow/i),
   ).toBeVisible();
+  await expect(
+    page.getByText(/step-by-step choices in one view/i),
+  ).toBeVisible();
+  await expect(page.getByText(/plan you can share/i)).toBeVisible();
 
   // Carousel with navigation
   await page.getByLabel("Next destination").click();
   await page.getByLabel("Previous destination").click();
 
   // Destination grid shows all 13
-  await expect(page.getByText("13 destinations")).toBeVisible();
+  await expect(page.getByText("12 destinations")).toBeVisible();
 
   // Navigate to planner
   await page.getByRole("link", { name: /start planning/i }).first().click();
-  await expect(page.getByText("Planner setup")).toBeVisible();
+  await expect(page.getByText("Planner setup · Step 1 of 2")).toBeVisible();
+});
+
+test("home destination card deep-links to trip details step", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.locator('a[href="/planner?dest=jaipur"]').first().click();
+  await expect(page.getByText("Your trip details")).toBeVisible();
+  await expect(page.getByText("Planner setup · Step 2 of 2")).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Jaipur", level: 2 }),
+  ).toBeVisible();
 });
 
 test("transfer API returns real OSRM data", async ({ request }) => {
@@ -107,7 +135,7 @@ test("hotel API returns real Xotelo data (no key needed)", async ({
 
 test("hotel API works for new destinations", async ({ request }) => {
   const res = await request.get(
-    "/api/hotels?destination=manali&checkIn=2026-06-01&checkOut=2026-06-04&adults=2",
+    "/api/hotels?destination=shimla&checkIn=2026-06-01&checkOut=2026-06-04&adults=2",
   );
   expect(res.status()).toBe(200);
 
@@ -119,7 +147,7 @@ test("hotel API works for new destinations", async ({ request }) => {
 test("activities API returns curated data for all destinations", async ({
   request,
 }) => {
-  for (const dest of ["goa", "manali", "varanasi", "leh"]) {
+  for (const dest of ["goa", "shimla", "varanasi", "leh"]) {
     const res = await request.get(`/api/activities?destination=${dest}`);
     expect(res.status()).toBe(200);
 
@@ -127,6 +155,47 @@ test("activities API returns curated data for all destinations", async ({
     expect(data.source).toBe("curated");
     expect(data.activities.length).toBeGreaterThan(0);
   }
+});
+
+test("summary page shows Skyscanner and Google Flights links", async ({
+  page,
+}) => {
+  const plan = {
+    basics: {
+      sourceCity: "Bengaluru",
+      destination: "goa",
+      startDate: "2026-06-01",
+      days: 4,
+      budget: 30000,
+      travelers: 2,
+      style: "Relaxed",
+    },
+    outbound: {
+      id: "t-out",
+      label: "Morning",
+      departTime: "07:00",
+      arriveTime: "08:30",
+      duration: "1h 30m",
+      durationMinutes: 90,
+      price: 4000,
+      tag: "Test",
+      reason: "Test",
+    },
+    stayTotal: 0,
+    activities: [],
+    total: 4000,
+    perPerson: 2000,
+    totalDurationMinutes: 90,
+  };
+  const encoded = encodePlan(plan as SummaryPlan);
+  await page.goto(`/summary?plan=${encodeURIComponent(encoded)}`);
+
+  const sky = page.locator('a[href*="skyscanner.co.in/transport/flights"]');
+  await expect(sky.first()).toBeVisible({ timeout: 10_000 });
+  await expect(sky.first()).toHaveAttribute("href", /\/flights\/blr\/goi\//);
+
+  const google = page.locator('a[href*="google.com/travel/flights"]');
+  await expect(google.first()).toBeVisible();
 });
 
 test("flights API returns 503 without Ignav key or 200 with", async ({

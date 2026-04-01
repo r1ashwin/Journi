@@ -2,20 +2,27 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowRight,
+  BedDouble,
   Check,
   Copy,
   ExternalLink,
   Loader2,
   MapPin,
+  Palmtree,
+  Plane,
+  PlaneLanding,
   Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { OptionCard } from "@/components/planner/option-card";
+import { PlannerAtmosphere } from "@/components/planner/planner-atmosphere";
 import { TripCanvas } from "@/components/planner/trip-canvas";
 import {
+  encodePlan,
   formatCurrency,
   getActivityOptions,
   getDestinationContent,
@@ -23,7 +30,14 @@ import {
   getReturnOptions,
   getStayOptions,
 } from "@/lib/planner";
-import { sourceCities, tripStyles } from "@/lib/travel-data";
+import { ACTIVITY_LOADING_PHRASES } from "@/lib/activity-loading-phrases";
+import {
+  destinations,
+  sourceCities,
+  tripStyles,
+} from "@/lib/travel-data";
+import { enrichActivitiesWithExploreLinks } from "@/lib/services/activity-service";
+import { useTimeOfDay, type TimeOfDayInfo } from "@/lib/use-time-of-day";
 import type {
   ActivityOption,
   DestinationSlug,
@@ -37,17 +51,41 @@ import type {
 
 type PlannerStep = "setup" | "outbound" | "stay" | "activities" | "return";
 
-import { destinations } from "@/lib/travel-data";
 const allDestinations = Object.values(destinations);
 
 const stepMeta: Record<
   Exclude<PlannerStep, "setup">,
-  { number: number; label: string }
+  {
+    number: number;
+    label: string;
+    short: string;
+    Icon: typeof Plane;
+  }
 > = {
-  outbound: { number: 1, label: "Pick your outbound flight" },
-  stay: { number: 2, label: "Choose where to stay" },
-  activities: { number: 3, label: "Add activity picks" },
-  return: { number: 4, label: "Choose your return flight" },
+  outbound: {
+    number: 1,
+    label: "Pick your outbound flight",
+    short: "Outbound flight",
+    Icon: Plane,
+  },
+  stay: {
+    number: 2,
+    label: "Choose where to stay",
+    short: "Hotel",
+    Icon: BedDouble,
+  },
+  activities: {
+    number: 3,
+    label: "Add activity picks",
+    short: "Activities",
+    Icon: Palmtree,
+  },
+  return: {
+    number: 4,
+    label: "Choose your return flight",
+    short: "Return flight",
+    Icon: PlaneLanding,
+  },
 };
 
 import { destinationAirports } from "@/lib/geo";
@@ -56,7 +94,6 @@ const destinationRegions: Record<DestinationSlug, string> = {
   goa: "Goa, India",
   jaipur: "Jaipur, Rajasthan, India",
   udaipur: "Udaipur, Rajasthan, India",
-  manali: "Manali, Himachal Pradesh, India",
   rishikesh: "Rishikesh, Uttarakhand, India",
   varanasi: "Varanasi, Uttar Pradesh, India",
   andaman: "Port Blair, Andaman, India",
@@ -87,10 +124,18 @@ function googleMapsUrl(place: string, slug: DestinationSlug) {
   return `https://www.google.com/maps/search/${encodeURIComponent(query)}/@${cityLat},${cityLng},13z`;
 }
 
-export function PlannerApp() {
+function destinationFromQueryParam(raw: string | undefined): DestinationSlug | null {
+  if (!raw) return null;
+  const slug = raw.trim().toLowerCase();
+  return slug in destinations ? (slug as DestinationSlug) : null;
+}
+
+export function PlannerApp({ initialDest }: { initialDest?: string }) {
+  const preset = destinationFromQueryParam(initialDest);
+
   const [basics, setBasics] = useState<TripBasics>({
     sourceCity: "Bengaluru",
-    destination: "goa",
+    destination: preset ?? "goa",
     startDate: getDefaultDate(),
     days: 4,
     budget: 30000,
@@ -98,6 +143,12 @@ export function PlannerApp() {
     style: "Relaxed",
   });
   const [started, setStarted] = useState(false);
+  const [setupPhase, setSetupPhase] = useState<"destination" | "details">(
+    preset ? "details" : "destination",
+  );
+  /** Grid checkmarks only when non-null (not the implicit TripBasics default). */
+  const [setupDestinationSelection, setSetupDestinationSelection] =
+    useState<DestinationSlug | null>(null);
   const [currentStep, setCurrentStep] = useState<PlannerStep>("setup");
   const [copied, setCopied] = useState(false);
   const [selections, setSelections] = useState<PlannerSelections>({
@@ -116,8 +167,26 @@ export function PlannerApp() {
   // Loading
   const [loading, setLoading] = useState(false);
   const [loadingMsg, setLoadingMsg] = useState("");
+  const [activityLoadPhraseIdx, setActivityLoadPhraseIdx] = useState(0);
+
+  const timeOfDay = useTimeOfDay();
+  const maxActivitySelections = useMemo(
+    () => Math.min(12, Math.max(4, basics.days)),
+    [basics.days],
+  );
+  const hotelNights = Math.max(basics.days - 1, 0);
 
   const destination = getDestinationContent(basics.destination);
+
+  function shell(node: ReactNode) {
+    return <PlannerAtmosphere>{node}</PlannerAtmosphere>;
+  }
+
+  useEffect(() => {
+    if (!started && setupPhase === "details") {
+      window.scrollTo({ top: 0, behavior: "instant" });
+    }
+  }, [started, setupPhase]);
 
   // --- Data fetching ---
 
@@ -227,7 +296,12 @@ export function PlannerApp() {
       }
       throw new Error("empty");
     } catch {
-      setActivityOptions(getActivityOptions(basics));
+      setActivityOptions(
+        enrichActivitiesWithExploreLinks(
+          basics.destination,
+          getActivityOptions(basics),
+        ),
+      );
     } finally {
       setLoading(false);
     }
@@ -255,6 +329,17 @@ export function PlannerApp() {
       cancelled = true;
     };
   }, [currentStep, started, fetchFlights, fetchHotels, fetchActivities, basics]);
+
+  useEffect(() => {
+    if (!loading || currentStep !== "activities") return;
+    setActivityLoadPhraseIdx(0);
+    const id = setInterval(() => {
+      setActivityLoadPhraseIdx(
+        (i) => (i + 1) % ACTIVITY_LOADING_PHRASES.length,
+      );
+    }, 2200);
+    return () => clearInterval(id);
+  }, [loading, currentStep]);
 
   // --- Totals from dynamic data ---
 
@@ -339,7 +424,7 @@ export function PlannerApp() {
           activityIds: c.activityIds.filter((id) => id !== activityId),
         };
       }
-      if (c.activityIds.length >= 2) return c;
+      if (c.activityIds.length >= maxActivitySelections) return c;
       return { ...c, activityIds: [...c.activityIds, activityId] };
     });
   }
@@ -357,10 +442,7 @@ export function PlannerApp() {
       perPerson: totals.perPerson,
       totalDurationMinutes: totals.totalDurationMinutes,
     };
-    const encoded = btoa(
-      unescape(encodeURIComponent(JSON.stringify(plan))),
-    );
-    return `/summary?plan=${encoded}`;
+    return `/summary?plan=${encodePlan(plan)}`;
   }
 
   async function copyShareLink() {
@@ -375,95 +457,207 @@ export function PlannerApp() {
   // ============================
 
   if (!started) {
-    return (
-      <div className="min-h-screen px-5 py-6 md:px-8">
+    if (setupPhase === "destination") {
+      return shell(
+        <div className="min-h-screen px-5 py-6 md:px-8 md:py-8">
+          <div className="mx-auto w-full max-w-6xl">
+            <header className="flex flex-wrap items-center justify-between gap-3">
+              <Link
+                href="/"
+                className="text-xl font-semibold tracking-tight md:text-2xl"
+              >
+                Journi
+              </Link>
+              <TimeOfDayChip info={timeOfDay} />
+            </header>
+
+            <div className="mt-6 md:mt-8">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">
+                Planner setup · Step 1 of 2
+              </p>
+              <h1 className="mt-2 text-3xl font-semibold tracking-tight md:text-4xl">
+                Pick your destination
+              </h1>
+              <p className="mt-2 max-w-xl text-[15px] text-[var(--muted)]">
+                Tap a place to continue — the next screen is your trip details
+                and a live preview of your itinerary.
+              </p>
+
+              <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+                {allDestinations.map((dest) => (
+                  <button
+                    key={dest.slug}
+                    type="button"
+                    onClick={() => {
+                      setBasics((c) => ({ ...c, destination: dest.slug }));
+                      setSetupDestinationSelection(dest.slug);
+                      setSetupPhase("details");
+                    }}
+                    className={cn(
+                      "group relative overflow-hidden rounded-xl border transition-all duration-200",
+                      setupDestinationSelection === dest.slug
+                        ? "border-[var(--accent)] ring-2 ring-[var(--accent)]/30 shadow-md"
+                        : "border-[var(--border)] hover:border-[var(--accent)]/30 hover:shadow-sm",
+                    )}
+                  >
+                    <div className="relative aspect-[4/3]">
+                      <Image
+                        src={dest.image}
+                        alt={dest.name}
+                        fill
+                        className="object-cover transition-transform duration-300 group-hover:scale-105"
+                        sizes="(max-width: 640px) 45vw, (max-width: 1024px) 30vw, 200px"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
+                      {setupDestinationSelection === dest.slug && (
+                        <div className="absolute top-2 right-2 rounded-full bg-[var(--accent)] p-1">
+                          <Check className="size-3 text-white" />
+                        </div>
+                      )}
+                      <div className="absolute bottom-0 left-0 p-2.5">
+                        <h3 className="text-sm font-semibold text-white drop-shadow-sm">
+                          {dest.name}
+                        </h3>
+                        <p className="mt-0.5 text-[11px] text-white/80 line-clamp-1">
+                          {dest.bestFor.split(",")[0]}
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    return shell(
+      <div className="min-h-screen px-5 py-6 md:px-8 md:py-8">
         <div className="mx-auto max-w-6xl">
-          <header className="flex items-center justify-between">
-            <Link href="/" className="text-xl font-semibold tracking-tight">
+          <header className="flex flex-wrap items-center justify-between gap-3">
+            <Link
+              href="/"
+              className="text-xl font-semibold tracking-tight md:text-2xl"
+            >
               Journi
             </Link>
+            <TimeOfDayChip info={timeOfDay} />
           </header>
 
-          <section className="mt-8">
+          <section className="mt-6 md:mt-8">
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">
-              Planner setup
+              Planner setup · Step 2 of 2
             </p>
             <h1 className="mt-2 text-3xl font-semibold tracking-tight md:text-4xl">
-              Pick your destination
+              Your trip details
             </h1>
             <p className="mt-2 max-w-xl text-[15px] text-[var(--muted)]">
-              Choose where you want to go — we&apos;ll find real flights, stays,
-              and local experiences.
+              Set how you&apos;re traveling on the left — your itinerary preview
+              updates on the right.
             </p>
+          </section>
 
-            {/* Destination grid */}
-            <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-              {allDestinations.map((dest) => (
+          {/* Full-width: about the destination */}
+          <section className="mt-6 overflow-hidden rounded-2xl border border-[var(--border)] bg-white shadow-[0_4px_24px_rgba(0,0,0,0.04)]">
+            <div className="relative min-h-[200px] w-full md:min-h-[240px]">
+              <Image
+                src={destination.image}
+                alt={destination.name}
+                fill
+                className="object-cover"
+                sizes="(max-width: 1024px) 100vw, 1152px"
+                priority
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/35 to-black/20" />
+              <div className="absolute right-3 top-3 md:right-4 md:top-4">
                 <button
-                  key={dest.slug}
                   type="button"
-                  onClick={() =>
-                    setBasics((c) => ({ ...c, destination: dest.slug }))
-                  }
-                  className={cn(
-                    "group relative overflow-hidden rounded-xl border transition-all duration-200",
-                    basics.destination === dest.slug
-                      ? "border-[var(--accent)] ring-2 ring-[var(--accent)]/30 shadow-md"
-                      : "border-[var(--border)] hover:border-[var(--accent)]/30 hover:shadow-sm",
-                  )}
+                  onClick={() => {
+                    setSetupDestinationSelection(basics.destination);
+                    setSetupPhase("destination");
+                  }}
+                  className="rounded-full border border-white/40 bg-black/25 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur-sm transition-colors hover:bg-black/40 md:px-4 md:py-2 md:text-sm"
                 >
-                  <div className="relative aspect-[4/3]">
-                    <Image
-                      src={dest.image}
-                      alt={dest.name}
-                      fill
-                      className="object-cover transition-transform duration-300 group-hover:scale-105"
-                      sizes="(max-width: 640px) 45vw, (max-width: 1024px) 30vw, 200px"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
-                    {basics.destination === dest.slug && (
-                      <div className="absolute top-2 right-2 rounded-full bg-[var(--accent)] p-1">
-                        <Check className="size-3 text-white" />
-                      </div>
-                    )}
-                    <div className="absolute bottom-0 left-0 p-2.5">
-                      <h3 className="text-sm font-semibold text-white drop-shadow-sm">
-                        {dest.name}
-                      </h3>
-                      <p className="mt-0.5 text-[11px] text-white/80 line-clamp-1">
-                        {dest.bestFor.split(",")[0]}
-                      </p>
-                    </div>
-                  </div>
+                  Change destination
                 </button>
-              ))}
+              </div>
+              <div className="absolute bottom-0 left-0 right-0 p-4 md:p-6 md:pr-44">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-white/20 px-2.5 py-0.5 text-xs font-semibold text-white backdrop-blur-sm">
+                  <Sparkles className="size-3" />
+                  {destination.bestFor.split(",")[0]}
+                </span>
+                <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white md:text-3xl">
+                  {destination.name}
+                </h2>
+                <p className="mt-2 max-w-3xl text-sm leading-relaxed text-white/90 md:text-[15px]">
+                  {destination.summary}
+                </p>
+              </div>
+            </div>
+            <div className="border-t border-[var(--border)] p-4 md:p-5">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">
+                Notable spots · open in Maps
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {destination.famousPlaces.map((place) => (
+                  <a
+                    key={place}
+                    href={googleMapsUrl(place, basics.destination)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="group/place inline-flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--surface)]/50 px-3 py-1.5 text-sm font-medium transition-all hover:border-[var(--accent)]/35 hover:bg-white hover:shadow-sm"
+                  >
+                    <MapPin className="size-3.5 shrink-0 text-[var(--accent)]" />
+                    {place}
+                    <ExternalLink className="size-3 text-[var(--muted)] opacity-60 transition-opacity group-hover/place:opacity-100" />
+                  </a>
+                ))}
+              </div>
             </div>
           </section>
 
-          {/* Trip details row */}
-          <section className="mt-8 grid gap-8 lg:grid-cols-[1.1fr_0.9fr] lg:items-start">
-            <div className="space-y-5">
-              <h2 className="text-lg font-semibold tracking-tight">
-                Trip details
-              </h2>
+          {/* Form (left) + trip preview (right) */}
+          <section className="mt-6 grid gap-6 lg:mt-8 lg:grid-cols-[1fr_min(340px,100%)] lg:items-start lg:gap-8">
+            <div className="space-y-5 rounded-2xl border border-[var(--border)] bg-white p-5 md:p-6">
+              <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4">
+                <h2 className="text-lg font-semibold tracking-tight">
+                  Flying from, dates & budget
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSetupDestinationSelection(basics.destination);
+                    setSetupPhase("destination");
+                  }}
+                  className="w-fit rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs font-medium text-[var(--foreground)] transition-colors hover:border-[var(--accent)]/30 hover:bg-white sm:hidden"
+                >
+                  Change destination
+                </button>
+              </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="Flying from">
-                  <select
-                    value={basics.sourceCity}
-                    onChange={(e) =>
-                      setBasics((c) => ({
-                        ...c,
-                        sourceCity: e.target.value as TripBasics["sourceCity"],
-                      }))
-                    }
-                    className="w-full rounded-xl border border-[var(--border)] bg-white px-4 py-3 text-sm transition-colors focus:border-[var(--accent)] focus:outline-none"
-                  >
-                    {sourceCities.map((city) => (
-                      <option key={city} value={city}>
-                        {city}
-                      </option>
-                    ))}
-                  </select>
+                  <>
+                    <select
+                      value={basics.sourceCity}
+                      onChange={(e) =>
+                        setBasics((c) => ({
+                          ...c,
+                          sourceCity: e.target.value as TripBasics["sourceCity"],
+                        }))
+                      }
+                      className="w-full rounded-xl border border-[var(--border)] bg-white px-4 py-3 text-sm transition-colors focus:border-[var(--accent)] focus:outline-none"
+                    >
+                      {sourceCities.map((city) => (
+                        <option key={city} value={city}>
+                          {city}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-[11px] leading-relaxed text-[var(--muted)]">
+                      More departure cities coming soon.
+                    </p>
+                  </>
                 </Field>
 
                 <Field label="Start date">
@@ -555,48 +749,22 @@ export function PlannerApp() {
               </button>
             </div>
 
-            {/* Destination preview card */}
-            <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-white">
-              <div className="relative aspect-[16/9] w-full">
-                <Image
-                  src={destination.image}
-                  alt={destination.name}
-                  fill
-                  className="object-cover"
-                  sizes="(max-width: 1024px) 90vw, 400px"
-                  priority
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
-                <div className="absolute bottom-3 left-4">
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-white/90 px-2.5 py-0.5 text-xs font-semibold text-[var(--accent)] backdrop-blur-sm">
-                    <Sparkles className="size-3" />
-                    {destination.bestFor.split(",")[0]}
-                  </span>
-                </div>
-              </div>
-              <div className="p-5">
-                <h2 className="text-2xl font-semibold tracking-tight">
-                  {destination.name}
-                </h2>
-                <p className="mt-2 text-sm leading-relaxed text-[var(--muted)]">
-                  {destination.summary}
-                </p>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {destination.famousPlaces.slice(0, 4).map((place) => (
-                    <a
-                      key={place}
-                      href={googleMapsUrl(place, basics.destination)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 rounded-full bg-[var(--surface)]/50 px-3 py-1.5 text-sm font-medium transition-all hover:bg-white hover:shadow-sm"
-                    >
-                      <MapPin className="size-3 text-[var(--accent)]" />
-                      {place}
-                    </a>
-                  ))}
-                </div>
-              </div>
-            </div>
+            <TripCanvas
+              previewMode
+              previewBasics={{
+                budget: basics.budget,
+                days: basics.days,
+                travelers: basics.travelers,
+                routeLabel: `${basics.sourceCity} → ${destination.name}`,
+              }}
+              tripNights={hotelNights}
+              total={0}
+              perPerson={0}
+              totalMinutes={0}
+              activities={[]}
+              currentStep="outbound"
+              onEdit={() => {}}
+            />
           </section>
         </div>
       </div>
@@ -608,192 +776,234 @@ export function PlannerApp() {
   // ============================
 
   const step = stepMeta[currentStep as Exclude<PlannerStep, "setup">];
+  const StepIcon = step.Icon;
 
-  return (
+  return shell(
     <div className="min-h-screen px-5 py-5 md:px-8">
       <div className="mx-auto max-w-6xl">
-        <header className="flex items-center justify-between">
+        <header className="flex flex-wrap items-center justify-between gap-3">
           <Link href="/" className="text-xl font-semibold tracking-tight">
             Journi
           </Link>
-          <div className="rounded-full bg-[var(--surface)] px-4 py-1.5 text-sm font-medium">
-            {basics.sourceCity} → {destination.name}
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <TimeOfDayChip info={timeOfDay} />
+            <div className="rounded-full bg-[var(--surface)] px-4 py-1.5 text-sm font-medium">
+              {basics.sourceCity} → {destination.name}
+            </div>
           </div>
         </header>
 
-        {/* Destination banner */}
-        <section className="mt-5 overflow-hidden rounded-2xl border border-[var(--border)] bg-white">
-          <div className="flex flex-col md:flex-row">
-            {/* Image */}
-            <div className="relative aspect-[16/9] w-full md:aspect-auto md:w-56 lg:w-64">
-              <Image
-                src={destination.image}
-                alt={destination.name}
-                fill
-                className="object-cover"
-                sizes="(max-width: 768px) 100vw, 260px"
-                priority
-              />
+        {/* Famous spots — full width above the planner */}
+        <section className="mt-5 rounded-2xl border border-[var(--border)] bg-white p-4 md:p-5">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">
+            Notable spots · open in Maps
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {destination.famousPlaces.map((place) => (
+              <a
+                key={place}
+                href={googleMapsUrl(place, basics.destination)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="group/place inline-flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--surface)]/50 px-3 py-1.5 text-sm font-medium transition-all hover:border-[var(--accent)]/35 hover:bg-white hover:shadow-sm"
+              >
+                <MapPin className="size-3.5 shrink-0 text-[var(--accent)]" />
+                {place}
+                <ExternalLink className="size-3 text-[var(--muted)] opacity-60 transition-opacity group-hover/place:opacity-100" />
+              </a>
+            ))}
+          </div>
+        </section>
+
+        {/* Trip context: destination + your parameters */}
+        <section className="mt-4 flex flex-col gap-3 overflow-hidden rounded-2xl border border-[var(--border)] bg-white p-4 sm:flex-row sm:items-center sm:gap-4 md:p-5">
+          <div className="relative h-20 w-full shrink-0 overflow-hidden rounded-xl sm:h-16 sm:w-28">
+            <Image
+              src={destination.image}
+              alt={destination.name}
+              fill
+              className="object-cover"
+              sizes="(max-width: 640px) 100vw, 112px"
+              priority
+            />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-1 rounded-full bg-[var(--accent-soft)] px-2.5 py-0.5 text-xs font-semibold text-[var(--accent)]">
+                <Sparkles className="size-3" />
+                {destination.name}
+              </span>
+              <span className="text-xs text-[var(--muted)]">
+                {basics.sourceCity} → {destination.name}
+              </span>
             </div>
-            {/* Content */}
-            <div className="min-w-0 flex-1 p-5">
-              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                <div className="min-w-0 flex-1">
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--accent-soft)] px-2.5 py-0.5 text-xs font-semibold text-[var(--accent)]">
-                    <Sparkles className="size-3" />
-                    {destination.name}
-                  </span>
-                  <h1 className="mt-2 text-lg font-semibold tracking-tight">
-                    {destination.name} at a glance
-                  </h1>
-                  <p className="mt-1 text-sm text-[var(--muted)]">
-                    {destination.summary}
-                  </p>
-                </div>
-                <div className="flex shrink-0 flex-wrap gap-1.5 text-xs">
-                  <span className="rounded-full bg-[var(--surface)] px-2.5 py-1 font-medium">
-                    {basics.days} days
-                  </span>
-                  <span className="rounded-full bg-[var(--surface)] px-2.5 py-1 font-medium">
-                    {formatCurrency(basics.budget)}
-                  </span>
-                  <span className="rounded-full bg-[var(--surface)] px-2.5 py-1 font-medium">
-                    {basics.style}
-                  </span>
-                </div>
-              </div>
-              <div className="mt-3 flex flex-wrap gap-1.5">
-                {destination.famousPlaces.map((place) => (
-                  <a
-                    key={place}
-                    href={googleMapsUrl(place, basics.destination)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="group/place inline-flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--surface)]/40 px-2.5 py-1 text-xs font-medium transition-all hover:border-[var(--accent)]/30 hover:bg-white hover:shadow-sm"
-                  >
-                    <MapPin className="size-3 text-[var(--accent)]" />
-                    {place}
-                    <ExternalLink className="size-2.5 text-[var(--muted)] opacity-0 transition-opacity group-hover/place:opacity-100" />
-                  </a>
-                ))}
-              </div>
-            </div>
+            <p className="mt-1.5 text-sm leading-relaxed text-[var(--muted)] line-clamp-2 md:line-clamp-none">
+              {destination.summary}
+            </p>
+          </div>
+          <div className="flex shrink-0 flex-wrap gap-1.5">
+            <span className="rounded-full bg-[var(--surface)] px-2.5 py-1 text-xs font-medium">
+              {basics.days} days
+            </span>
+            <span className="rounded-full bg-[var(--surface)] px-2.5 py-1 text-xs font-medium">
+              {formatCurrency(basics.budget)}
+            </span>
+            <span className="rounded-full bg-[var(--surface)] px-2.5 py-1 text-xs font-medium">
+              {basics.style}
+            </span>
           </div>
         </section>
 
         {/* Two columns */}
-        <section className="mt-5 grid gap-5 xl:grid-cols-[1fr_340px]">
+        <section className="mt-5 grid gap-6 xl:grid-cols-[1fr_min(360px,100%)] xl:items-start">
           {/* Left — step options */}
           <div className="min-w-0">
-            <div className="rounded-2xl border border-[var(--border)] bg-white p-5">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--accent)]">
-                    Step {step.number} of 4
+            <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-white shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+              <div className="border-b border-[var(--border)] bg-[var(--surface)]/45 px-4 py-4 sm:px-5 sm:py-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="flex min-w-0 items-start gap-3">
+                    <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-white shadow-sm ring-1 ring-[var(--border)]">
+                      <StepIcon
+                        className="size-5 text-[var(--accent)]"
+                        strokeWidth={2}
+                        aria-hidden
+                      />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+                        Step {step.number} of 4 · {step.short}
+                      </p>
+                      <h2 className="mt-0.5 text-lg font-semibold tracking-tight sm:text-xl">
+                        {step.label}
+                      </h2>
+                    </div>
+                  </div>
+                  <p className="max-w-[14rem] text-right text-[11px] leading-snug text-[var(--muted)] sm:text-xs">
+                    Tap one row. Your trip panel updates on the right.
                   </p>
-                  <h2 className="mt-1 text-lg font-semibold tracking-tight">
-                    {step.label}
-                  </h2>
                 </div>
-                <p className="hidden text-right text-xs text-[var(--muted)] md:block">
-                  Select an option. Your trip updates live →
-                </p>
               </div>
 
-              {/* Loading */}
-              {loading && (
-                <div className="mt-8 flex flex-col items-center justify-center py-10">
-                  <Loader2 className="size-7 animate-spin text-[var(--accent)]" />
-                  <p className="mt-3 text-sm font-medium text-[var(--muted)]">
-                    {loadingMsg}
-                  </p>
-                </div>
-              )}
+              <div className="px-4 py-4 sm:px-5 sm:py-5">
+                {/* Loading */}
+                {loading && (
+                  <div className="flex flex-col items-center justify-center py-12 sm:py-14">
+                    <Loader2 className="size-7 animate-spin text-[var(--accent)]" />
+                    <p className="mt-3 min-h-[3rem] max-w-sm text-center text-sm font-medium leading-relaxed text-[var(--muted)]">
+                      {currentStep === "activities"
+                        ? ACTIVITY_LOADING_PHRASES[activityLoadPhraseIdx]
+                        : loadingMsg}
+                    </p>
+                  </div>
+                )}
 
-              {/* Options */}
-              {!loading && (
-                <div className="mt-5 space-y-3">
-                  {currentStep === "outbound" &&
-                    outboundOptions.map((opt) => (
-                      <OptionCard
-                        key={opt.id}
-                        title={opt.label}
-                        subtitle={`${opt.departTime} → ${opt.arriveTime} · ${opt.duration}`}
-                        price={opt.price}
-                        tag={opt.tag}
-                        reason={opt.reason}
-                        selected={selections.outboundFlightId === opt.id}
-                        onClick={() => {
-                          updateSelection({ outboundFlightId: opt.id });
-                          setCurrentStep("stay");
-                        }}
-                      />
-                    ))}
-
-                  {currentStep === "stay" &&
-                    stayOptions.map((stay) => (
-                      <OptionCard
-                        key={stay.id}
-                        title={stay.name}
-                        subtitle={`${stay.area} · ${formatCurrency(stay.nightlyPrice)}/night`}
-                        price={
-                          stay.nightlyPrice * Math.max(basics.days - 1, 1)
-                        }
-                        tag={stay.tag}
-                        reason={stay.reason}
-                        selected={selections.stayId === stay.id}
-                        onClick={() => handleStaySelection(stay.id)}
-                        image={stay.image}
-                        rating={stay.rating}
-                      />
-                    ))}
-
-                  {currentStep === "activities" && (
-                    <>
-                      {activityOptions.map((act) => (
+                {/* Options */}
+                {!loading && (
+                  <div
+                    className={cn(
+                      "flex flex-col",
+                      currentStep === "stay"
+                        ? "gap-4 lg:grid lg:grid-cols-2 lg:gap-4"
+                        : "gap-3 sm:gap-4",
+                    )}
+                  >
+                    {currentStep === "outbound" &&
+                      outboundOptions.map((opt) => (
                         <OptionCard
-                          key={act.id}
-                          title={act.name}
-                          subtitle={`${act.duration} · ${formatCurrency(act.cost)}`}
-                          price={act.cost}
-                          tag={act.tag}
-                          reason={act.description}
-                          selected={selections.activityIds.includes(act.id)}
-                          onClick={() => toggleActivity(act.id)}
+                          key={opt.id}
+                          title={opt.label}
+                          subtitle={`${opt.departTime} → ${opt.arriveTime} · ${opt.duration}`}
+                          price={opt.price}
+                          tag={opt.tag}
+                          reason={opt.reason}
+                          selected={selections.outboundFlightId === opt.id}
+                          onClick={() => {
+                            updateSelection({ outboundFlightId: opt.id });
+                            setCurrentStep("stay");
+                          }}
                         />
                       ))}
-                      <div className="flex items-center justify-between gap-4 rounded-xl bg-[var(--surface)]/50 p-4">
-                        <p className="text-sm text-[var(--muted)]">
-                          Pick up to 2 activities, or skip ahead.
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => setCurrentStep("return")}
-                          className="shrink-0 rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[var(--accent-hover)]"
-                        >
-                          Continue
-                        </button>
-                      </div>
-                    </>
-                  )}
 
-                  {currentStep === "return" &&
-                    returnOptions.map((opt) => (
-                      <OptionCard
-                        key={opt.id}
-                        title={opt.label}
-                        subtitle={`${opt.departTime} → ${opt.arriveTime} · ${opt.duration}`}
-                        price={opt.price}
-                        tag={opt.tag}
-                        reason={opt.reason}
-                        selected={selections.returnFlightId === opt.id}
-                        onClick={() =>
-                          updateSelection({ returnFlightId: opt.id })
-                        }
-                      />
-                    ))}
-                </div>
-              )}
+                    {currentStep === "stay" &&
+                      stayOptions.map((stay) => (
+                        <OptionCard
+                          key={stay.id}
+                          title={stay.name}
+                          subtitle={`${stay.area} · ${formatCurrency(stay.nightlyPrice)}/night`}
+                          price={
+                            stay.nightlyPrice * Math.max(basics.days - 1, 1)
+                          }
+                          tag={stay.tag}
+                          reason={stay.reason}
+                          selected={selections.stayId === stay.id}
+                          onClick={() => handleStaySelection(stay.id)}
+                          image={stay.image}
+                          rating={stay.rating}
+                        />
+                      ))}
+
+                    {currentStep === "activities" && (
+                      <>
+                        <p className="rounded-lg border border-dashed border-[var(--border)] bg-[var(--surface)]/25 px-3 py-2.5 text-xs leading-relaxed text-[var(--muted)] sm:text-[13px]">
+                          Tour-style ideas. Tap a card to add; use the link under
+                          a card to check live prices elsewhere.
+                        </p>
+                        <div className="flex flex-col gap-3 sm:gap-3.5">
+                          {activityOptions.map((act) => (
+                            <OptionCard
+                              key={act.id}
+                              title={act.name}
+                              subtitle={`${act.duration} · ${formatCurrency(act.cost)}`}
+                              price={act.cost}
+                              tag={act.tag}
+                              reason={act.description}
+                              selected={selections.activityIds.includes(act.id)}
+                              onClick={() => toggleActivity(act.id)}
+                              footerLink={
+                                act.exploreUrl
+                                  ? {
+                                      href: act.exploreUrl,
+                                      label: "Find tours to book",
+                                    }
+                                  : undefined
+                              }
+                            />
+                          ))}
+                        </div>
+                        <div className="mt-1 flex flex-col gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)]/30 p-4 sm:flex-row sm:items-center sm:justify-between">
+                          <p className="text-sm leading-snug text-[var(--muted)]">
+                            Up to {maxActivitySelections} picks for{" "}
+                            {basics.days} days, or skip.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => setCurrentStep("return")}
+                            className="shrink-0 rounded-full bg-[var(--accent)] px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[var(--accent-hover)]"
+                          >
+                            Continue
+                          </button>
+                        </div>
+                      </>
+                    )}
+
+                    {currentStep === "return" &&
+                      returnOptions.map((opt) => (
+                        <OptionCard
+                          key={opt.id}
+                          title={opt.label}
+                          subtitle={`${opt.departTime} → ${opt.arriveTime} · ${opt.duration}`}
+                          price={opt.price}
+                          tag={opt.tag}
+                          reason={opt.reason}
+                          selected={selections.returnFlightId === opt.id}
+                          onClick={() =>
+                            updateSelection({ returnFlightId: opt.id })
+                          }
+                        />
+                      ))}
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Share bar */}
@@ -843,10 +1053,35 @@ export function PlannerApp() {
               returnFlight={totals.returnFlight}
               currentStep={currentStep as Exclude<PlannerStep, "setup">}
               onEdit={setCurrentStep}
+              tripNights={hotelNights}
             />
           </div>
         </section>
       </div>
+    </div>
+  );
+}
+
+function TimeOfDayChip({ info }: { info: TimeOfDayInfo }) {
+  const Icon = info.Icon;
+  return (
+    <div
+      className="flex items-center gap-2 rounded-full border border-[var(--border)] bg-white/95 px-3 py-1.5 text-xs font-semibold text-[var(--foreground)] shadow-sm backdrop-blur-sm"
+      title="Local time at a glance."
+    >
+      <Icon
+        className={cn(
+          "size-4 shrink-0",
+          info.phase === "morning" && "text-amber-500",
+          info.phase === "afternoon" && "text-sky-500",
+          info.phase === "evening" && "text-orange-500",
+          info.phase === "night" && "text-indigo-500",
+        )}
+      />
+      <span className="hidden sm:inline">{info.label}</span>
+      <span className="tabular-nums font-medium text-[var(--muted)]">
+        {info.clock}
+      </span>
     </div>
   );
 }

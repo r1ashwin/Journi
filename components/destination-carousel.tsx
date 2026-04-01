@@ -37,7 +37,7 @@ export function DestinationCarousel({
     <div className="relative flex h-[380px] flex-col md:h-[420px]">
       {/* Card */}
       <Link
-        href="/planner"
+        href={`/planner?dest=${dest.slug}`}
         key={dest.slug}
         className="group relative flex-1 overflow-hidden rounded-2xl border border-[var(--border)] shadow-[0_8px_40px_rgba(0,0,0,0.08)] transition-all duration-300 hover:shadow-[0_12px_50px_rgba(0,0,0,0.12)]"
       >

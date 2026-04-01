@@ -19,7 +19,6 @@ export type DestinationSlug =
   | "goa"
   | "jaipur"
   | "udaipur"
-  | "manali"
   | "rishikesh"
   | "varanasi"
   | "andaman"
@@ -48,7 +47,6 @@ export type FlightOption = {
   price: number;
   tag: string;
   reason: string;
-  bookingId?: string;
 };
 
 export type StayOption = {
@@ -80,6 +78,8 @@ export type ActivityOption = {
   durationMinutes: number;
   cost: number;
   tag: string;
+  /** Open search / marketplace (e.g. Thrillophilia-style tours) — not scraped in-app. */
+  exploreUrl?: string;
 };
 
 export type DestinationContent = {

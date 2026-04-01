@@ -1,4 +1,4 @@
-import { Check, CircleDot, Circle, Pencil } from "lucide-react";
+import { Check, CircleDot, Circle, Moon, Pencil } from "lucide-react";
 import { formatCurrency, formatMinutes } from "@/lib/planner";
 import { cn } from "@/lib/utils";
 import type {
@@ -19,6 +19,17 @@ type TripCanvasProps = {
   returnFlight?: FlightOption;
   currentStep: "outbound" | "stay" | "activities" | "return";
   onEdit: (step: "outbound" | "stay" | "activities" | "return") => void;
+  /** Before the 4 steps: show budget / length / group and a placeholder timeline */
+  previewMode?: boolean;
+  previewBasics?: {
+    budget: number;
+    days: number;
+    travelers: number;
+    routeLabel: string;
+  };
+  /** Hotel nights (trip days − 1); shows sleep pacing in the timeline. */
+  tripNights?: number;
+  sleepHoursPerNight?: number;
 };
 
 type StepStatus = "complete" | "current" | "upcoming";
@@ -34,6 +45,10 @@ export function TripCanvas({
   returnFlight,
   currentStep,
   onEdit,
+  previewMode = false,
+  previewBasics,
+  tripNights,
+  sleepHoursPerNight = 8,
 }: TripCanvasProps) {
   const stepOrder: Array<"outbound" | "stay" | "activities" | "return"> = [
     "outbound",
@@ -44,23 +59,71 @@ export function TripCanvas({
   const currentIdx = stepOrder.indexOf(currentStep);
 
   function getStatus(step: typeof stepOrder[number]): StepStatus {
+    if (previewMode) return "upcoming";
     const idx = stepOrder.indexOf(step);
     if (idx < currentIdx) return "complete";
     if (idx === currentIdx) return "current";
     return "upcoming";
   }
 
+  const showEdit = !previewMode;
+
+  const nights =
+    tripNights ??
+    (previewMode && previewBasics
+      ? Math.max(previewBasics.days - 1, 1)
+      : undefined);
+
   return (
-    <aside className="rounded-2xl border border-[var(--border)] bg-white p-5">
+    <aside className="rounded-2xl border border-[var(--border)] bg-white p-5 lg:sticky lg:top-6">
       <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">
         Your trip
       </p>
       <h2 className="mt-1 text-lg font-semibold tracking-tight">Taking shape</h2>
+      {previewMode && previewBasics && (
+        <p className="mt-1 text-xs leading-relaxed text-[var(--muted)]">
+          {previewBasics.routeLabel} — flights, stay, and activities appear here
+          after you start.
+        </p>
+      )}
 
-      <div className="mt-4 grid grid-cols-3 gap-2">
-        <Metric label="Total" value={formatCurrency(total)} />
-        <Metric label="Per person" value={formatCurrency(perPerson)} />
-        <Metric label="Time" value={formatMinutes(totalMinutes)} />
+      <div
+        className={cn(
+          "mt-4 grid gap-2",
+          previewMode && previewBasics
+            ? "grid-cols-2 sm:grid-cols-2 lg:grid-cols-4"
+            : "grid-cols-2 lg:grid-cols-4",
+        )}
+      >
+        {previewMode && previewBasics ? (
+          <>
+            <Metric label="Budget" value={formatCurrency(previewBasics.budget)} />
+            <Metric label="Length" value={`${previewBasics.days} days`} />
+            <Metric label="Travelers" value={String(previewBasics.travelers)} />
+            {nights != null && nights > 0 ? (
+              <Metric
+                label="Hotel rest"
+                value={`~${nights * sleepHoursPerNight}h`}
+              />
+            ) : (
+              <Metric label="Hotel rest" value="—" />
+            )}
+          </>
+        ) : (
+          <>
+            <Metric label="Total" value={formatCurrency(total)} />
+            <Metric label="Per person" value={formatCurrency(perPerson)} />
+            <Metric label="Active time" value={formatMinutes(totalMinutes)} />
+            {nights != null && nights > 0 ? (
+              <Metric
+                label="Hotel rest"
+                value={`~${nights * sleepHoursPerNight}h`}
+              />
+            ) : (
+              <Metric label="Hotel rest" value="—" />
+            )}
+          </>
+        )}
       </div>
 
       <div className="mt-6">
@@ -73,7 +136,7 @@ export function TripCanvas({
               : "Pick your outbound flight"
           }
           meta={outbound ? formatCurrency(outbound.price) : undefined}
-          onEdit={() => onEdit("outbound")}
+          onEdit={showEdit ? () => onEdit("outbound") : undefined}
           isLast={false}
         />
         <TimelineItem
@@ -85,10 +148,13 @@ export function TripCanvas({
               : "Choose where to stay"
           }
           meta={stay ? `${formatCurrency(stay.nightlyPrice)}/night` : undefined}
-          onEdit={() => onEdit("stay")}
+          onEdit={showEdit ? () => onEdit("stay") : undefined}
           isLast={false}
         />
-        {transfer && (
+        {!previewMode && nights != null && nights > 0 && (
+          <RestAtHotelRow nights={nights} sleepHours={sleepHoursPerNight} />
+        )}
+        {!previewMode && transfer && (
           <TimelineItem
             status={stay ? "complete" : "upcoming"}
             title="Transfer"
@@ -106,7 +172,7 @@ export function TripCanvas({
               : "Add activity picks"
           }
           meta={activities.length > 0 ? `${activities.length} selected` : undefined}
-          onEdit={() => onEdit("activities")}
+          onEdit={showEdit ? () => onEdit("activities") : undefined}
           isLast={false}
         />
         <TimelineItem
@@ -118,11 +184,40 @@ export function TripCanvas({
               : "Choose your return flight"
           }
           meta={returnFlight ? formatCurrency(returnFlight.price) : undefined}
-          onEdit={() => onEdit("return")}
+          onEdit={showEdit ? () => onEdit("return") : undefined}
           isLast={true}
         />
       </div>
     </aside>
+  );
+}
+
+function RestAtHotelRow({
+  nights,
+  sleepHours,
+}: {
+  nights: number;
+  sleepHours: number;
+}) {
+  return (
+    <div className="relative flex gap-3">
+      <div className="flex flex-col items-center">
+        <div className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border-2 border-indigo-200 bg-indigo-50 text-indigo-700">
+          <Moon className="size-3" strokeWidth={2.5} />
+        </div>
+        <div className="mt-1 w-px flex-1 bg-[var(--border)]" />
+      </div>
+      <div className="flex-1 pb-5">
+        <p className="text-sm font-semibold text-[var(--foreground)]">
+          Nights & sleep
+        </p>
+        <p className="mt-0.5 text-[13px] leading-relaxed text-[var(--muted)]">
+          {nights} night{nights === 1 ? "" : "s"} at your hotel (~{sleepHours}h
+          rest each night) — counted in how your days feel, not as a paid
+          activity.
+        </p>
+      </div>
+    </div>
   );
 }
 

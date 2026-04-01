@@ -1,3 +1,4 @@
+import { getActivitiesForDestination } from "@/lib/services/activity-service";
 import { destinations } from "@/lib/travel-data";
 import type {
   ActivityOption,
@@ -28,7 +29,7 @@ export function getStayOptions(basics: TripBasics): StayOption[] {
 }
 
 export function getActivityOptions(basics: TripBasics): ActivityOption[] {
-  return getDestinationContent(basics.destination).activities;
+  return getActivitiesForDestination(basics.destination);
 }
 
 export function findFlightById(
@@ -149,17 +150,26 @@ export function buildShareQuery(basics: TripBasics, selections: PlannerSelection
   return params.toString();
 }
 
+/** Share links must work in the browser (no `base64url` in client Buffer). */
 export function encodePlan(plan: SummaryPlan): string {
-  return Buffer.from(JSON.stringify(plan)).toString("base64url");
+  return btoa(unescape(encodeURIComponent(JSON.stringify(plan))));
 }
 
 export function decodePlan(encoded: string): SummaryPlan | null {
+  if (typeof Buffer !== "undefined") {
+    for (const fmt of ["base64url", "base64"] as const) {
+      try {
+        const json = Buffer.from(encoded, fmt).toString("utf-8");
+        return JSON.parse(json) as SummaryPlan;
+      } catch {
+        /* try next format (legacy btoa links vs encodePlan) */
+      }
+    }
+    return null;
+  }
   try {
-    const json =
-      typeof Buffer !== "undefined"
-        ? Buffer.from(encoded, "base64url").toString("utf-8")
-        : atob(encoded.replace(/-/g, "+").replace(/_/g, "/"));
-    return JSON.parse(json);
+    const json = decodeURIComponent(escape(atob(encoded)));
+    return JSON.parse(json) as SummaryPlan;
   } catch {
     return null;
   }

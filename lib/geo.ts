@@ -27,7 +27,6 @@ export const destinationAirports: Record<
   goa: { iata: "GOI", lat: 15.3808, lng: 73.8314, cityLat: 15.2993, cityLng: 74.124 },
   jaipur: { iata: "JAI", lat: 26.8242, lng: 75.8122, cityLat: 26.9124, cityLng: 75.7873 },
   udaipur: { iata: "UDR", lat: 24.6177, lng: 73.8961, cityLat: 24.5854, cityLng: 73.7125 },
-  manali: { iata: "KUU", lat: 31.8767, lng: 77.1544, cityLat: 32.2396, cityLng: 77.1887 },
   rishikesh: { iata: "DED", lat: 30.1897, lng: 78.1803, cityLat: 30.0869, cityLng: 78.2676 },
   varanasi: { iata: "VNS", lat: 25.4524, lng: 82.8593, cityLat: 25.3176, cityLng: 83.0064 },
   andaman: { iata: "IXZ", lat: 11.641, lng: 92.7297, cityLat: 11.6234, cityLng: 92.7265 },
@@ -43,7 +42,6 @@ export const tripAdvisorKeys: Record<DestinationSlug, string> = {
   goa: "g303877",
   jaipur: "g304555",
   udaipur: "g297672",
-  manali: "g297618",
   rishikesh: "g580106",
   varanasi: "g297685",
   andaman: "g297584",
@@ -72,11 +70,6 @@ export const areaCoordinates: Record<
   udaipur: {
     "Lal Ghat": { lat: 24.576, lng: 73.6825 },
     Ambamata: { lat: 24.59, lng: 73.705 },
-  },
-  manali: {
-    "Old Manali": { lat: 32.2532, lng: 77.1855 },
-    "Mall Road": { lat: 32.2396, lng: 77.1887 },
-    Solang: { lat: 32.3154, lng: 77.1572 },
   },
   rishikesh: {
     Tapovan: { lat: 30.1291, lng: 78.3127 },

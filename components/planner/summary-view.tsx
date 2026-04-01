@@ -1,12 +1,10 @@
 import Image from "next/image";
+import { ExternalLink, Plane, Hotel, Map, CarFront, Sparkles } from "lucide-react";
 import {
-  ExternalLink,
-  Plane,
-  Hotel,
-  Map,
-  CarFront,
-  Sparkles,
-} from "lucide-react";
+  googleFlightsRoundTripSearchUrl,
+  isLikelyBookableHotelUrl,
+  skyscannerRoundTripFlightsUrl,
+} from "@/lib/booking-links";
 import { formatCurrency, formatMinutes, getDestinationContent } from "@/lib/planner";
 import type { SummaryPlan } from "@/lib/types";
 
@@ -34,6 +32,11 @@ export function SummaryView({ plan }: SummaryViewProps) {
   const budgetPct = basics.budget > 0 ? Math.round((total / basics.budget) * 100) : 0;
   const budgetStatus =
     budgetPct <= 80 ? "under" : budgetPct <= 100 ? "close" : "over";
+
+  const flightLinks = {
+    skyscanner: skyscannerRoundTripFlightsUrl(basics),
+    google: googleFlightsRoundTripSearchUrl(basics),
+  };
 
   return (
     <div className="space-y-6">
@@ -108,7 +111,16 @@ export function SummaryView({ plan }: SummaryViewProps) {
             title={outbound.label}
             detail={`${outbound.departTime} → ${outbound.arriveTime}`}
             price={outbound.price}
-            bookingId={outbound.bookingId}
+            links={[
+              {
+                label: "Skyscanner",
+                href: flightLinks.skyscanner,
+              },
+              {
+                label: "Google Flights",
+                href: flightLinks.google,
+              },
+            ]}
           />
         )}
         {returnFlight && (
@@ -118,7 +130,16 @@ export function SummaryView({ plan }: SummaryViewProps) {
             title={returnFlight.label}
             detail={`${returnFlight.departTime} → ${returnFlight.arriveTime}`}
             price={returnFlight.price}
-            bookingId={returnFlight.bookingId}
+            links={[
+              {
+                label: "Skyscanner",
+                href: flightLinks.skyscanner,
+              },
+              {
+                label: "Google Flights",
+                href: flightLinks.google,
+              },
+            ]}
           />
         )}
         {stay && (
@@ -128,7 +149,16 @@ export function SummaryView({ plan }: SummaryViewProps) {
             title={`${stay.name}`}
             detail={`${stay.area} · ${formatCurrency(stay.nightlyPrice)}/night`}
             price={stayTotal}
-            bookingUrl={stay.bookingUrl}
+            links={
+              isLikelyBookableHotelUrl(stay.bookingUrl)
+                ? [
+                    {
+                      label: "View listing",
+                      href: stay.bookingUrl!,
+                    },
+                  ]
+                : undefined
+            }
             image={stay.image}
           />
         )}
@@ -182,8 +212,7 @@ function BookingCard({
   title,
   detail,
   price,
-  bookingId,
-  bookingUrl,
+  links,
   image,
 }: {
   icon: React.ReactNode;
@@ -191,13 +220,9 @@ function BookingCard({
   title: string;
   detail: string;
   price: number;
-  bookingId?: string;
-  bookingUrl?: string;
+  links?: { label: string; href: string }[];
   image?: string;
 }) {
-  const hasLink = bookingId || bookingUrl;
-  const href = bookingUrl || (bookingId ? `https://ignav.com/book/${bookingId}` : undefined);
-
   return (
     <div className="flex overflow-hidden rounded-xl border border-[var(--border)]">
       {image && (
@@ -214,20 +239,25 @@ function BookingCard({
           <p className="mt-1 text-sm font-medium">{title}</p>
           <p className="mt-0.5 text-xs text-[var(--muted)]">{detail}</p>
         </div>
-        <div className="mt-2 flex items-center justify-between">
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
           <p className="text-sm font-semibold tabular-nums">
             {formatCurrency(price)}
           </p>
-          {hasLink && href && (
-            <a
-              href={href}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 rounded-full bg-[var(--accent)] px-3 py-1 text-xs font-semibold text-white transition-colors hover:bg-[var(--accent-hover)]"
-            >
-              Book
-              <ExternalLink className="size-3" />
-            </a>
+          {links && links.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              {links.map((l) => (
+                <a
+                  key={l.label + l.href}
+                  href={l.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 rounded-full bg-[var(--accent)] px-2.5 py-1 text-[11px] font-semibold text-white transition-colors hover:bg-[var(--accent-hover)]"
+                >
+                  {l.label}
+                  <ExternalLink className="size-2.5" />
+                </a>
+              ))}
+            </div>
           )}
         </div>
       </div>

@@ -114,7 +114,6 @@ function mapItinerary(
     price,
     tag: deriveTag(price, ob.duration_minutes, stops, idx, all),
     reason: deriveReason(timeOfDay, stops),
-    bookingId: itin.ignav_id,
   };
 }
 

@@ -14,6 +14,10 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    const minMs = 420;
+    const jitter = Math.floor(Math.random() * 380);
+    await new Promise((r) => setTimeout(r, minMs + jitter));
+
     const result = searchActivities({ destination });
     return NextResponse.json(result);
   } catch (error) {

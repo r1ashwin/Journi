@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, Sparkles } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { destinations } from "@/lib/travel-data";
 import { DestinationCarousel } from "@/components/destination-carousel";
 
@@ -23,25 +23,21 @@ export default function HomePage() {
         </header>
 
         <section className="grid gap-12 lg:grid-cols-[1.15fr_0.85fr] lg:items-center">
-          <div className="space-y-6">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--accent-soft)] px-3 py-1 text-sm font-medium text-[var(--accent)]">
-              <Sparkles className="size-3.5" />
-              India trip planner
-            </span>
-            <h1 className="max-w-xl text-4xl font-semibold tracking-tight text-balance md:text-5xl">
-              Plan your trip, one choice at a time.
+          <div className="space-y-5">
+            <h1 className="max-w-2xl text-4xl font-semibold tracking-tight text-balance sm:text-5xl md:text-6xl">
+              Get live destinations, hotels, and flights, all in one place.
             </h1>
-            <p className="max-w-lg text-[15px] leading-7 text-[var(--muted)]">
-              Journi turns messy trip research into a calm visual flow. Real
-              flights, real stays, and real transfer estimates — through clean
-              blocks while your full trip builds live on the side.
+            <p className="max-w-xl text-xl font-medium leading-snug text-[var(--foreground)] md:text-2xl">
+              Turn trip research into a calm flow. Step-by-step choices in one
+              view, totals that keep up, room for outings, and a plan you can
+              share.
             </p>
             <Link
               href="/planner"
-              className="inline-flex items-center gap-2 rounded-full bg-[var(--accent)] px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-[var(--accent-hover)]"
+              className="inline-flex items-center gap-2 rounded-full bg-[var(--accent)] px-6 py-3.5 text-base font-semibold text-white transition-colors hover:bg-[var(--accent-hover)] md:px-7 md:py-4 md:text-lg"
             >
               Start planning
-              <ArrowRight className="size-4" />
+              <ArrowRight className="size-5" />
             </Link>
           </div>
 
@@ -65,7 +61,7 @@ export default function HomePage() {
             {destinationList.map((dest) => (
               <Link
                 key={dest.slug}
-                href="/planner"
+                href={`/planner?dest=${dest.slug}`}
                 className="group overflow-hidden rounded-2xl border border-[var(--border)] bg-white transition-all hover:shadow-[0_8px_30px_rgba(0,0,0,0.06)]"
               >
                 <div className="relative aspect-[4/3] w-full overflow-hidden">

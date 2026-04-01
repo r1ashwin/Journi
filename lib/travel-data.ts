@@ -678,22 +678,6 @@ export const destinations: Record<DestinationSlug, DestinationContent> = {
       },
     ],
   },
-  manali: {
-    slug: "manali",
-    name: "Manali",
-    summary:
-      "A mountain escape in the Kullu Valley with snow-capped peaks, adventure sports, cozy cafes, and the charm of Old Manali.",
-    bestFor: "Adventure, couples, snow trips, nature getaways",
-    image:
-      "https://images.unsplash.com/photo-1626621341517-bbf3d9990a23?w=800&h=500&fit=crop&q=80&auto=format",
-    imageCredit: "Ankit Sood",
-    famousPlaces: ["Solang Valley", "Rohtang Pass", "Old Manali", "Hadimba Temple", "Mall Road"],
-    activities: [
-      { id: "mnl-act-1", name: "Solang Valley adventure", description: "Paragliding, zorbing, and snow activities in the valley.", duration: "5h", durationMinutes: 300, cost: 2500, tag: "Must try" },
-      { id: "mnl-act-2", name: "Old Manali cafe crawl", description: "A relaxed day exploring cafes, street shops, and riverside walks.", duration: "4h", durationMinutes: 240, cost: 1200, tag: "Popular" },
-      { id: "mnl-act-3", name: "Rohtang day trip", description: "A full-day drive to the iconic Rohtang Pass for snow views.", duration: "8h", durationMinutes: 480, cost: 3000, tag: "Must visit" },
-    ],
-  },
   rishikesh: {
     slug: "rishikesh",
     name: "Rishikesh",
@@ -701,8 +685,8 @@ export const destinations: Record<DestinationSlug, DestinationContent> = {
       "The yoga capital of the world — a Ganges-side town for rafting, ashrams, suspension bridges, and spiritual calm.",
     bestFor: "Adventure, yoga, spiritual trips, rafting",
     image:
-      "https://images.unsplash.com/photo-1600086827875-a63b01f1335c?w=800&h=500&fit=crop&q=80&auto=format",
-    imageCredit: "Naveen Kumar",
+      "https://images.unsplash.com/photo-1720819029162-8500607ae232?w=800&h=500&fit=crop&q=80&auto=format",
+    imageCredit: "Unsplash",
     famousPlaces: ["Laxman Jhula", "Ram Jhula", "Triveni Ghat", "Beatles Ashram", "Neer Garh Waterfall"],
     activities: [
       { id: "rsh-act-1", name: "White-water rafting", description: "16 km rafting on the Ganges with rapids from grade I to IV.", duration: "4h", durationMinutes: 240, cost: 2000, tag: "Must try" },
@@ -747,8 +731,8 @@ export const destinations: Record<DestinationSlug, DestinationContent> = {
       "The former British summer capital — a hill station with colonial charm, toy train rides, and pine-covered trails.",
     bestFor: "Family trips, couples, winter snow, heritage",
     image:
-      "https://images.unsplash.com/photo-1585135497273-1a86b09fe70e?w=800&h=500&fit=crop&q=80&auto=format",
-    imageCredit: "Mohit Kumar",
+      "https://images.unsplash.com/photo-1597074866923-dc0589150358?w=800&h=500&fit=crop&q=80&auto=format",
+    imageCredit: "Unsplash",
     famousPlaces: ["The Ridge", "Mall Road", "Jakhoo Temple", "Christ Church", "Kufri"],
     activities: [
       { id: "shm-act-1", name: "Heritage walk", description: "Walk the Ridge, Mall Road, and visit the colonial Christ Church.", duration: "4h", durationMinutes: 240, cost: 800, tag: "Popular" },
@@ -792,8 +776,8 @@ export const destinations: Record<DestinationSlug, DestinationContent> = {
       "High-altitude desert landscapes, monasteries, Pangong Lake, and some of the most dramatic scenery on the planet.",
     bestFor: "Adventure, road trips, photography, nature",
     image:
-      "https://images.unsplash.com/photo-1584464491033-06628f3a6b7b?w=800&h=500&fit=crop&q=80&auto=format",
-    imageCredit: "Prashant Gupta",
+      "https://images.unsplash.com/photo-1606857090627-27ca46667290?w=800&h=500&fit=crop&q=80&auto=format",
+    imageCredit: "Ken S",
     famousPlaces: ["Pangong Lake", "Khardung La", "Thiksey Monastery", "Shanti Stupa", "Magnetic Hill"],
     activities: [
       { id: "leh-act-1", name: "Pangong Lake day trip", description: "A full-day drive to the surreal blue Pangong Tso lake.", duration: "10h", durationMinutes: 600, cost: 4000, tag: "Must visit" },
