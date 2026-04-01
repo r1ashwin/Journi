@@ -256,6 +256,11 @@ export function PlannerApp({
 
   useLayoutEffect(() => {
     if (fromUrlResume) return;
+    // Home / marketing `?dest=` is an explicit pick — do not overwrite with session draft.
+    if (preset) {
+      setSessionBoot(true);
+      return;
+    }
     try {
       const draft = readPlannerDraft();
       if (draft?.token) {
@@ -289,7 +294,7 @@ export function PlannerApp({
     } finally {
       setSessionBoot(true);
     }
-  }, [fromUrlResume]);
+  }, [fromUrlResume, preset]);
 
   /** Destination grid: never show a checkmark until the user taps (incl. session restore + Back). */
   useLayoutEffect(() => {
