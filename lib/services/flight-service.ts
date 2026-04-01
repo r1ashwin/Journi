@@ -63,7 +63,8 @@ export async function searchFlights(
     departure_date: params.date,
   });
 
-  const itineraries = data.itineraries ?? [];
+  const raw = data.itineraries ?? [];
+  const itineraries = raw.filter((i) => i.outbound.segments.length === 1);
   if (itineraries.length === 0) throw new Error("NO_FLIGHTS_FOUND");
 
   const flights: FlightOption[] = itineraries

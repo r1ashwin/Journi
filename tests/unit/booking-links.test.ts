@@ -54,15 +54,15 @@ describe("booking-links", () => {
     expect(u).toMatch(/\/flights\/del\/jai\/\d{6}\/\d{6}\//);
   });
 
-  it("uses correct airports for Shimla from Chandigarh", () => {
+  it("uses correct airports for Kozhikode from Delhi", () => {
     const b: TripBasics = {
       ...basics,
-      sourceCity: "Chandigarh",
-      destination: "shimla",
+      sourceCity: "Delhi",
+      destination: "kozhikode",
       startDate: "2026-09-01",
       days: 5,
     };
     const u = skyscannerRoundTripFlightsUrl(b);
-    expect(u).toMatch(/\/flights\/ixc\/slv\/\d{6}\/\d{6}\//);
+    expect(u).toMatch(/\/flights\/del\/ccj\/\d{6}\/\d{6}\//);
   });
 });

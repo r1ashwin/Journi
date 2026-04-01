@@ -135,7 +135,7 @@ test("hotel API returns real Xotelo data (no key needed)", async ({
 
 test("hotel API works for new destinations", async ({ request }) => {
   const res = await request.get(
-    "/api/hotels?destination=shimla&checkIn=2026-06-01&checkOut=2026-06-04&adults=2",
+    "/api/hotels?destination=hyderabad&checkIn=2026-06-01&checkOut=2026-06-04&adults=2",
   );
   expect(res.status()).toBe(200);
 
@@ -147,7 +147,7 @@ test("hotel API works for new destinations", async ({ request }) => {
 test("activities API returns curated data for all destinations", async ({
   request,
 }) => {
-  for (const dest of ["goa", "shimla", "varanasi", "leh"]) {
+  for (const dest of ["goa", "hyderabad", "varanasi", "leh"]) {
     const res = await request.get(`/api/activities?destination=${dest}`);
     expect(res.status()).toBe(200);
 

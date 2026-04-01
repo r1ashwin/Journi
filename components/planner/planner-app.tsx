@@ -3,12 +3,18 @@
 import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   ArrowRight,
   BedDouble,
   Check,
-  Copy,
   ExternalLink,
   Loader2,
   MapPin,
@@ -21,7 +27,9 @@ import { cn } from "@/lib/utils";
 import { OptionCard } from "@/components/planner/option-card";
 import { PlannerAtmosphere } from "@/components/planner/planner-atmosphere";
 import { TripCanvas } from "@/components/planner/trip-canvas";
+import { TripReadyShare } from "@/components/planner/trip-ready-share";
 import {
+  decodePlan,
   encodePlan,
   formatCurrency,
   getActivityOptions,
@@ -29,7 +37,13 @@ import {
   getOutboundOptions,
   getReturnOptions,
   getStayOptions,
+  seedActivityOptionsFromPlan,
+  seedOutboundOptionsFromPlan,
+  seedReturnOptionsFromPlan,
+  seedStayOptionsFromPlan,
+  selectionsFromSummaryPlan,
 } from "@/lib/planner";
+import { readPlannerDraft, writePlannerDraft } from "@/lib/planner-session";
 import { ACTIVITY_LOADING_PHRASES } from "@/lib/activity-loading-phrases";
 import {
   destinations,
@@ -88,7 +102,7 @@ const stepMeta: Record<
   },
 };
 
-import { destinationAirports } from "@/lib/geo";
+import { destinationAirports, sourceAirports } from "@/lib/geo";
 
 const destinationRegions: Record<DestinationSlug, string> = {
   goa: "Goa, India",
@@ -97,12 +111,12 @@ const destinationRegions: Record<DestinationSlug, string> = {
   rishikesh: "Rishikesh, Uttarakhand, India",
   varanasi: "Varanasi, Uttar Pradesh, India",
   andaman: "Port Blair, Andaman, India",
-  shimla: "Shimla, Himachal Pradesh, India",
   darjeeling: "Darjeeling, West Bengal, India",
-  pondicherry: "Pondicherry, India",
   leh: "Leh, Ladakh, India",
   amritsar: "Amritsar, Punjab, India",
-  munnar: "Munnar, Kerala, India",
+  kozhikode: "Kozhikode, Kerala, India",
+  chennai: "Chennai, Tamil Nadu, India",
+  hyderabad: "Hyderabad, Telangana, India",
 };
 
 function getDefaultDate() {
@@ -130,39 +144,69 @@ function destinationFromQueryParam(raw: string | undefined): DestinationSlug | n
   return slug in destinations ? (slug as DestinationSlug) : null;
 }
 
-export function PlannerApp({ initialDest }: { initialDest?: string }) {
+export function PlannerApp({
+  initialDest,
+  initialResumePlan = null,
+}: {
+  initialDest?: string;
+  initialResumePlan?: SummaryPlan | null;
+}) {
   const preset = destinationFromQueryParam(initialDest);
+  const resume = initialResumePlan ?? null;
+  const fromUrlResume = initialResumePlan != null;
+  const [sessionBoot, setSessionBoot] = useState(fromUrlResume);
 
-  const [basics, setBasics] = useState<TripBasics>({
-    sourceCity: "Bengaluru",
-    destination: preset ?? "goa",
-    startDate: getDefaultDate(),
-    days: 4,
-    budget: 30000,
-    travelers: 2,
-    style: "Relaxed",
-  });
-  const [started, setStarted] = useState(false);
-  const [setupPhase, setSetupPhase] = useState<"destination" | "details">(
-    preset ? "details" : "destination",
+  const [basics, setBasics] = useState<TripBasics>(() =>
+    resume
+      ? resume.basics
+      : {
+          sourceCity: "Bengaluru",
+          destination: preset ?? "goa",
+          startDate: getDefaultDate(),
+          days: 4,
+          budget: 30000,
+          travelers: 2,
+          style: "Relaxed",
+        },
+  );
+  const [started, setStarted] = useState(() => !!resume);
+  const [setupPhase, setSetupPhase] = useState<"destination" | "details">(() =>
+    resume || preset ? "details" : "destination",
   );
   /** Grid checkmarks only when non-null (not the implicit TripBasics default). */
   const [setupDestinationSelection, setSetupDestinationSelection] =
-    useState<DestinationSlug | null>(null);
-  const [currentStep, setCurrentStep] = useState<PlannerStep>("setup");
+    useState<DestinationSlug | null>(() =>
+      resume ? resume.basics.destination : null,
+    );
+  const [currentStep, setCurrentStep] = useState<PlannerStep>(() =>
+    resume ? "return" : "setup",
+  );
   const [copied, setCopied] = useState(false);
-  const [selections, setSelections] = useState<PlannerSelections>({
-    activityIds: [],
-  });
+  const [selections, setSelections] = useState<PlannerSelections>(() =>
+    resume ? selectionsFromSummaryPlan(resume) : { activityIds: [] },
+  );
 
-  // Dynamic options from APIs
-  const [outboundOptions, setOutboundOptions] = useState<FlightOption[]>([]);
-  const [stayOptions, setStayOptions] = useState<StayOption[]>([]);
-  const [activityOptions, setActivityOptions] = useState<ActivityOption[]>([]);
-  const [returnOptions, setReturnOptions] = useState<FlightOption[]>([]);
+  // Dynamic options from APIs (seed from summary when resuming)
+  const [outboundOptions, setOutboundOptions] = useState<FlightOption[]>(() =>
+    resume ? seedOutboundOptionsFromPlan(resume.basics, resume.outbound) : [],
+  );
+  const [stayOptions, setStayOptions] = useState<StayOption[]>(() =>
+    resume ? seedStayOptionsFromPlan(resume.basics, resume.stay) : [],
+  );
+  const [activityOptions, setActivityOptions] = useState<ActivityOption[]>(() =>
+    resume
+      ? enrichActivitiesWithExploreLinks(
+          resume.basics.destination,
+          seedActivityOptionsFromPlan(resume.basics, resume.activities),
+        )
+      : [],
+  );
+  const [returnOptions, setReturnOptions] = useState<FlightOption[]>(() =>
+    resume ? seedReturnOptionsFromPlan(resume.basics, resume.returnFlight) : [],
+  );
   const [currentTransfer, setCurrentTransfer] = useState<
     TransferOption | undefined
-  >();
+  >(() => resume?.transfer);
 
   // Loading
   const [loading, setLoading] = useState(false);
@@ -178,6 +222,17 @@ export function PlannerApp({ initialDest }: { initialDest?: string }) {
 
   const destination = getDestinationContent(basics.destination);
 
+  /** No flying to the same airport you depart from (e.g. Chennai → Chennai). */
+  const plannerDestinationChoices = useMemo(
+    () =>
+      allDestinations.filter(
+        (d) =>
+          sourceAirports[basics.sourceCity].iata !==
+          destinationAirports[d.slug].iata,
+      ),
+    [basics.sourceCity],
+  );
+
   function shell(node: ReactNode) {
     return <PlannerAtmosphere>{node}</PlannerAtmosphere>;
   }
@@ -187,6 +242,94 @@ export function PlannerApp({ initialDest }: { initialDest?: string }) {
       window.scrollTo({ top: 0, behavior: "instant" });
     }
   }, [started, setupPhase]);
+
+  /** Browser Back/Forward restores planner step (setup + flight flow). */
+  type PlannerHistoryState = {
+    journi: 1;
+    started: boolean;
+    setupPhase: "destination" | "details";
+    currentStep: PlannerStep;
+  };
+
+  const isPopNavigation = useRef(false);
+  const historySeeded = useRef(false);
+
+  useLayoutEffect(() => {
+    if (fromUrlResume) return;
+    try {
+      const draft = readPlannerDraft();
+      if (draft?.token) {
+        const plan = decodePlan(draft.token);
+        if (plan?.basics?.destination) {
+          setBasics(plan.basics);
+          setStarted(draft.started);
+          setSetupPhase(draft.setupPhase);
+          setSetupDestinationSelection(
+            draft.setupPhase === "destination" ? null : plan.basics.destination,
+          );
+          setCurrentStep(draft.currentStep);
+          setSelections(selectionsFromSummaryPlan(plan));
+          setOutboundOptions(
+            seedOutboundOptionsFromPlan(plan.basics, plan.outbound),
+          );
+          setStayOptions(seedStayOptionsFromPlan(plan.basics, plan.stay));
+          setActivityOptions(
+            enrichActivitiesWithExploreLinks(
+              plan.basics.destination,
+              seedActivityOptionsFromPlan(plan.basics, plan.activities),
+            ),
+          );
+          setReturnOptions(
+            seedReturnOptionsFromPlan(plan.basics, plan.returnFlight),
+          );
+          setCurrentTransfer(plan.transfer);
+          historySeeded.current = false;
+        }
+      }
+    } finally {
+      setSessionBoot(true);
+    }
+  }, [fromUrlResume]);
+
+  /** Destination grid: never show a checkmark until the user taps (incl. session restore + Back). */
+  useLayoutEffect(() => {
+    if (setupPhase !== "destination") return;
+    setSetupDestinationSelection(null);
+  }, [setupPhase]);
+
+  useEffect(() => {
+    const onPop = (e: PopStateEvent) => {
+      const s = e.state as PlannerHistoryState | null;
+      if (!s || s.journi !== 1) return;
+      isPopNavigation.current = true;
+      setStarted(s.started);
+      setSetupPhase(s.setupPhase);
+      setCurrentStep(s.currentStep);
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !sessionBoot) return;
+    if (isPopNavigation.current) {
+      isPopNavigation.current = false;
+      return;
+    }
+    const snap: PlannerHistoryState = {
+      journi: 1,
+      started,
+      setupPhase,
+      currentStep,
+    };
+    const url = window.location.pathname + window.location.search;
+    if (!historySeeded.current) {
+      historySeeded.current = true;
+      window.history.replaceState(snap, "", url);
+      return;
+    }
+    window.history.pushState(snap, "", url);
+  }, [sessionBoot, started, setupPhase, currentStep]);
 
   // --- Data fetching ---
 
@@ -279,6 +422,13 @@ export function PlannerApp({ initialDest }: { initialDest?: string }) {
     },
     [basics.destination],
   );
+
+  useEffect(() => {
+    const stay = stayOptions.find((s) => s.id === selections.stayId);
+    const area = stay?.area ?? resume?.stay?.area;
+    if (!area) return;
+    void fetchTransfer(area);
+  }, [selections.stayId, stayOptions, resume?.stay?.area, fetchTransfer]);
 
   const fetchActivities = useCallback(async () => {
     setLoading(true);
@@ -396,6 +546,36 @@ export function PlannerApp({ initialDest }: { initialDest?: string }) {
     currentTransfer,
   ]);
 
+  const currentSummaryPlan = useMemo(
+    (): SummaryPlan => ({
+      basics,
+      outbound: totals.outbound,
+      stay: totals.stay,
+      stayTotal: totals.stayTotal,
+      transfer: totals.transfer,
+      activities: totals.activities,
+      returnFlight: totals.returnFlight,
+      total: totals.total,
+      perPerson: totals.perPerson,
+      totalDurationMinutes: totals.totalDurationMinutes,
+    }),
+    [basics, totals],
+  );
+
+  const persistPlannerDraftToStorage = useCallback(() => {
+    writePlannerDraft({
+      token: encodePlan(currentSummaryPlan),
+      started,
+      setupPhase,
+      currentStep,
+    });
+  }, [currentSummaryPlan, started, setupPhase, currentStep]);
+
+  useEffect(() => {
+    if (!sessionBoot) return;
+    persistPlannerDraftToStorage();
+  }, [sessionBoot, persistPlannerDraftToStorage]);
+
   // --- Handlers ---
 
   function startPlanner() {
@@ -430,22 +610,11 @@ export function PlannerApp({ initialDest }: { initialDest?: string }) {
   }
 
   function getShareUrl() {
-    const plan: SummaryPlan = {
-      basics,
-      outbound: totals.outbound,
-      stay: totals.stay,
-      stayTotal: totals.stayTotal,
-      transfer: totals.transfer,
-      activities: totals.activities,
-      returnFlight: totals.returnFlight,
-      total: totals.total,
-      perPerson: totals.perPerson,
-      totalDurationMinutes: totals.totalDurationMinutes,
-    };
-    return `/summary?plan=${encodePlan(plan)}`;
+    return `/summary?plan=${encodeURIComponent(encodePlan(currentSummaryPlan))}`;
   }
 
   async function copyShareLink() {
+    persistPlannerDraftToStorage();
     const url = `${window.location.origin}${getShareUrl()}`;
     await navigator.clipboard.writeText(url);
     setCopied(true);
@@ -484,7 +653,7 @@ export function PlannerApp({ initialDest }: { initialDest?: string }) {
               </p>
 
               <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-                {allDestinations.map((dest) => (
+                {plannerDestinationChoices.map((dest) => (
                   <button
                     key={dest.slug}
                     type="button"
@@ -1003,41 +1172,19 @@ export function PlannerApp({ initialDest }: { initialDest?: string }) {
                       ))}
                   </div>
                 )}
+                {!loading && selections.returnFlightId && (
+                  <div className="mt-5 border-t border-[var(--border)] pt-5">
+                    <TripReadyShare
+                      summaryHref={getShareUrl()}
+                      onBeforeViewSummary={persistPlannerDraftToStorage}
+                      onCopyLink={() => void copyShareLink()}
+                      copied={copied}
+                      density="comfortable"
+                    />
+                  </div>
+                )}
               </div>
             </div>
-
-            {/* Share bar */}
-            {selections.returnFlightId && (
-              <div className="mt-5 rounded-2xl border border-[var(--accent)]/20 bg-[var(--accent-soft)]/30 p-5">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <h2 className="text-lg font-semibold tracking-tight">
-                      Your trip is ready
-                    </h2>
-                    <p className="mt-0.5 text-sm text-[var(--muted)]">
-                      Share it or view the full summary.
-                    </p>
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={copyShareLink}
-                      className="inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-white px-4 py-2 text-sm font-medium transition-colors hover:bg-[var(--surface)]"
-                    >
-                      <Copy className="size-3.5" />
-                      {copied ? "Copied!" : "Copy link"}
-                    </button>
-                    <Link
-                      href={getShareUrl()}
-                      className="inline-flex items-center gap-2 rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[var(--accent-hover)]"
-                    >
-                      View summary
-                      <ArrowRight className="size-3.5" />
-                    </Link>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
 
           {/* Right — canvas */}

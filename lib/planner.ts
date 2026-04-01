@@ -1,3 +1,4 @@
+import { curatedDirectFlightsForRoute } from "@/lib/curated-direct-flights";
 import { getActivitiesForDestination } from "@/lib/services/activity-service";
 import { destinations } from "@/lib/travel-data";
 import type {
@@ -17,11 +18,25 @@ export function getDestinationContent(destination: DestinationSlug): Destination
 }
 
 export function getOutboundOptions(basics: TripBasics): FlightOption[] {
-  return getDestinationContent(basics.destination).outboundFlights?.[basics.sourceCity] ?? [];
+  const dest = getDestinationContent(basics.destination);
+  const specific = dest.outboundFlights?.[basics.sourceCity];
+  if (specific && specific.length > 0) return specific;
+  return curatedDirectFlightsForRoute(
+    basics.sourceCity,
+    basics.destination,
+    "outbound",
+  );
 }
 
 export function getReturnOptions(basics: TripBasics): FlightOption[] {
-  return getDestinationContent(basics.destination).returnFlights?.[basics.sourceCity] ?? [];
+  const dest = getDestinationContent(basics.destination);
+  const specific = dest.returnFlights?.[basics.sourceCity];
+  if (specific && specific.length > 0) return specific;
+  return curatedDirectFlightsForRoute(
+    basics.sourceCity,
+    basics.destination,
+    "return",
+  );
 }
 
 export function getStayOptions(basics: TripBasics): StayOption[] {
@@ -108,6 +123,52 @@ export function calculatePlanTotals(basics: TripBasics, selections: PlannerSelec
   };
 }
 
+/** Rebuild planner selection IDs from a saved summary (resume / back from summary). */
+export function selectionsFromSummaryPlan(plan: SummaryPlan): PlannerSelections {
+  return {
+    outboundFlightId: plan.outbound?.id,
+    stayId: plan.stay?.id,
+    transferId: plan.transfer?.id,
+    returnFlightId: plan.returnFlight?.id,
+    activityIds: plan.activities.map((a) => a.id),
+  };
+}
+
+function mergeOptionById<T extends { id: string }>(extra: T | undefined, base: T[]): T[] {
+  if (!extra) return base;
+  if (base.some((x) => x.id === extra.id)) return base;
+  return [extra, ...base];
+}
+
+/** Curated list + chosen row from summary so totals work before API refresh. */
+export function seedOutboundOptionsFromPlan(
+  basics: TripBasics,
+  fromPlan?: FlightOption,
+): FlightOption[] {
+  return mergeOptionById(fromPlan, getOutboundOptions(basics));
+}
+
+export function seedReturnOptionsFromPlan(
+  basics: TripBasics,
+  fromPlan?: FlightOption,
+): FlightOption[] {
+  return mergeOptionById(fromPlan, getReturnOptions(basics));
+}
+
+export function seedStayOptionsFromPlan(basics: TripBasics, fromPlan?: StayOption): StayOption[] {
+  return mergeOptionById(fromPlan, getStayOptions(basics));
+}
+
+export function seedActivityOptionsFromPlan(
+  basics: TripBasics,
+  fromPlanActivities: ActivityOption[],
+): ActivityOption[] {
+  const base = getActivityOptions(basics);
+  const ids = new Set(base.map((a) => a.id));
+  const extras = fromPlanActivities.filter((a) => !ids.has(a.id));
+  return [...extras, ...base];
+}
+
 export function formatCurrency(amount: number) {
   return new Intl.NumberFormat("en-IN", {
     style: "currency",
@@ -150,29 +211,81 @@ export function buildShareQuery(basics: TripBasics, selections: PlannerSelection
   return params.toString();
 }
 
-/** Share links must work in the browser (no `base64url` in client Buffer). */
+/**
+ * URL-safe plan token (base64url: no + / = in the payload).
+ * Standard base64 in query strings breaks when `+` is read as a space.
+ */
 export function encodePlan(plan: SummaryPlan): string {
-  return btoa(unescape(encodeURIComponent(JSON.stringify(plan))));
+  const json = JSON.stringify(plan);
+  const b64 =
+    typeof Buffer !== "undefined"
+      ? Buffer.from(json, "utf-8").toString("base64")
+      : btoa(unescape(encodeURIComponent(json)));
+  return b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+function padBase64(b64: string): string {
+  const pad = b64.length % 4;
+  return pad ? b64 + "=".repeat(4 - pad) : b64;
+}
+
+/** Next.js / Express sometimes pass duplicate keys as string[]. */
+export function firstSearchParam(
+  v: string | string[] | undefined,
+): string | undefined {
+  if (typeof v === "string") return v;
+  if (Array.isArray(v) && typeof v[0] === "string") return v[0];
+  return undefined;
 }
 
 export function decodePlan(encoded: string): SummaryPlan | null {
+  if (!encoded?.trim()) return null;
+
+  // Query parsers often turn base64 "+" into a literal space
+  let s = encoded.trim().replace(/ /g, "+").replace(/[\n\r\t]/g, "");
+  try {
+    s = decodeURIComponent(s);
+  } catch {
+    /* already decoded or invalid % — try raw */
+  }
+
+  const tryParse = (b64: string): SummaryPlan | null => {
+    try {
+      let json: string;
+      if (typeof Buffer !== "undefined") {
+        json = Buffer.from(b64, "base64").toString("utf-8");
+      } else {
+        json = decodeURIComponent(escape(atob(b64)));
+      }
+      const plan = JSON.parse(json) as SummaryPlan;
+      if (plan?.basics && typeof plan.basics.destination === "string") {
+        return plan;
+      }
+    } catch {
+      /* next */
+    }
+    return null;
+  };
+
+  const normalized = padBase64(s.replace(/-/g, "+").replace(/_/g, "/"));
+  const fromUrl = tryParse(normalized);
+  if (fromUrl) return fromUrl;
+
   if (typeof Buffer !== "undefined") {
     for (const fmt of ["base64url", "base64"] as const) {
       try {
-        const json = Buffer.from(encoded, fmt).toString("utf-8");
-        return JSON.parse(json) as SummaryPlan;
+        const json = Buffer.from(s, fmt).toString("utf-8");
+        const plan = JSON.parse(json) as SummaryPlan;
+        if (plan?.basics && typeof plan.basics.destination === "string") {
+          return plan;
+        }
       } catch {
-        /* try next format (legacy btoa links vs encodePlan) */
+        /* continue */
       }
     }
-    return null;
   }
-  try {
-    const json = decodeURIComponent(escape(atob(encoded)));
-    return JSON.parse(json) as SummaryPlan;
-  } catch {
-    return null;
-  }
+
+  return tryParse(padBase64(s));
 }
 
 export function parseShareQuery(searchParams: Record<string, string | string[] | undefined>) {

@@ -22,12 +22,12 @@ export type DestinationSlug =
   | "rishikesh"
   | "varanasi"
   | "andaman"
-  | "shimla"
   | "darjeeling"
-  | "pondicherry"
   | "leh"
   | "amritsar"
-  | "munnar";
+  | "kozhikode"
+  | "chennai"
+  | "hyderabad";
 
 export type TripStyle =
   | "Relaxed"

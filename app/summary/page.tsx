@@ -1,6 +1,13 @@
 import Link from "next/link";
+import { SummaryShareBar } from "@/components/planner/summary-share-bar";
 import { SummaryView } from "@/components/planner/summary-view";
-import { decodePlan, parseShareQuery, calculatePlanTotals } from "@/lib/planner";
+import {
+  calculatePlanTotals,
+  decodePlan,
+  encodePlan,
+  firstSearchParam,
+  parseShareQuery,
+} from "@/lib/planner";
 import type { SummaryPlan } from "@/lib/types";
 
 type SummaryPageProps = {
@@ -12,9 +19,9 @@ export default async function SummaryPage({ searchParams }: SummaryPageProps) {
 
   let plan: SummaryPlan | null = null;
 
-  // New format: base64-encoded full plan
-  if (typeof params.plan === "string") {
-    plan = decodePlan(params.plan);
+  const planToken = firstSearchParam(params.plan)?.trim();
+  if (planToken) {
+    plan = decodePlan(planToken);
   }
 
   // Legacy format: URL params with selection IDs → compute from static data
@@ -59,15 +66,18 @@ export default async function SummaryPage({ searchParams }: SummaryPageProps) {
     );
   }
 
+  const backToTripHref = `/planner?plan=${encodeURIComponent(encodePlan(plan))}`;
+
   return (
     <main className="min-h-screen px-6 py-10 md:px-10">
       <div className="mx-auto max-w-3xl space-y-6">
         <Link
-          href="/planner"
+          href={backToTripHref}
           className="text-sm font-semibold text-[var(--accent)]"
         >
-          ← Back to planner
+          ← Back to your trip
         </Link>
+        <SummaryShareBar />
         <SummaryView plan={plan} />
       </div>
     </main>

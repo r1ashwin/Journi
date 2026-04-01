@@ -724,21 +724,6 @@ export const destinations: Record<DestinationSlug, DestinationContent> = {
       { id: "and-act-2", name: "Beach hopping day", description: "Radhanagar, Vijaynagar, and a sunset at Kalapathar Beach.", duration: "6h", durationMinutes: 360, cost: 1500, tag: "Popular" },
     ],
   },
-  shimla: {
-    slug: "shimla",
-    name: "Shimla",
-    summary:
-      "The former British summer capital — a hill station with colonial charm, toy train rides, and pine-covered trails.",
-    bestFor: "Family trips, couples, winter snow, heritage",
-    image:
-      "https://images.unsplash.com/photo-1597074866923-dc0589150358?w=800&h=500&fit=crop&q=80&auto=format",
-    imageCredit: "Unsplash",
-    famousPlaces: ["The Ridge", "Mall Road", "Jakhoo Temple", "Christ Church", "Kufri"],
-    activities: [
-      { id: "shm-act-1", name: "Heritage walk", description: "Walk the Ridge, Mall Road, and visit the colonial Christ Church.", duration: "4h", durationMinutes: 240, cost: 800, tag: "Popular" },
-      { id: "shm-act-2", name: "Kufri snow day", description: "Pony rides, skiing (in season), and views from Kufri hilltop.", duration: "5h", durationMinutes: 300, cost: 2000, tag: "Must try" },
-    ],
-  },
   darjeeling: {
     slug: "darjeeling",
     name: "Darjeeling",
@@ -752,21 +737,6 @@ export const destinations: Record<DestinationSlug, DestinationContent> = {
     activities: [
       { id: "drj-act-1", name: "Tiger Hill sunrise", description: "Early morning drive to see Kanchenjunga lit up at sunrise.", duration: "3h", durationMinutes: 180, cost: 1200, tag: "Must visit" },
       { id: "drj-act-2", name: "Tea estate tour", description: "Walk through Happy Valley tea garden and taste fresh Darjeeling tea.", duration: "3h", durationMinutes: 180, cost: 900, tag: "Popular" },
-    ],
-  },
-  pondicherry: {
-    slug: "pondicherry",
-    name: "Pondicherry",
-    summary:
-      "A French-colonial beach town with pastel streets, great cafes, Auroville, and a uniquely calm coastal vibe.",
-    bestFor: "Couples, food, art, beach weekends",
-    image:
-      "https://images.unsplash.com/photo-1582510003544-4d00b7f74220?w=800&h=500&fit=crop&q=80&auto=format",
-    imageCredit: "Raj Rana",
-    famousPlaces: ["Promenade Beach", "Auroville", "French Quarter", "Paradise Beach", "Basilica of Sacred Heart"],
-    activities: [
-      { id: "pdy-act-1", name: "French Quarter walk", description: "Explore pastel streets, cafes, and boutiques in White Town.", duration: "4h", durationMinutes: 240, cost: 800, tag: "Popular" },
-      { id: "pdy-act-2", name: "Auroville half-day", description: "Visit the Matrimandir, community spaces, and artisan workshops.", duration: "4h", durationMinutes: 240, cost: 600, tag: "Must visit" },
     ],
   },
   leh: {
@@ -800,19 +770,115 @@ export const destinations: Record<DestinationSlug, DestinationContent> = {
       { id: "asr-act-3", name: "Food trail", description: "Kulche chole, amritsari fish, lassi, and jalebi at legendary local joints.", duration: "3h", durationMinutes: 180, cost: 1200, tag: "Must try" },
     ],
   },
-  munnar: {
-    slug: "munnar",
-    name: "Munnar",
+  kozhikode: {
+    slug: "kozhikode",
+    name: "Kozhikode (Calicut)",
     summary:
-      "Rolling tea plantations, misty peaks, and waterfalls — Kerala's most scenic hill station for a nature reset.",
-    bestFor: "Nature, couples, tea plantations, slow travel",
+      "Arabian Sea sunsets, historic spice port lanes, legendary Malabar food, and easy access to Wayanad day trips.",
+    bestFor: "Food lovers, beach, history, slow travel",
     image:
-      "https://images.unsplash.com/photo-1602216056096-3b40cc0c9944?w=800&h=500&fit=crop&q=80&auto=format",
-    imageCredit: "Vishnu Prashad",
-    famousPlaces: ["Tea Museum", "Eravikulam National Park", "Top Station", "Mattupetty Dam", "Attukal Waterfalls"],
+      "https://images.unsplash.com/photo-1559827260-dc66d52bef19?w=800&h=500&fit=crop&q=80&auto=format",
+    imageCredit: "Unsplash",
+    famousPlaces: [
+      "Kozhikode Beach",
+      "Mananchira Square",
+      "Beypore port",
+      "Kappad Beach",
+      "SM Street food",
+    ],
     activities: [
-      { id: "mnr-act-1", name: "Tea plantation walk", description: "Walk through Kolukkumalai or Tata Tea estates with panoramic valley views.", duration: "4h", durationMinutes: 240, cost: 1500, tag: "Must try" },
-      { id: "mnr-act-2", name: "Eravikulam trek", description: "Spot the endangered Nilgiri Tahr and walk through shola grasslands.", duration: "4h", durationMinutes: 240, cost: 1000, tag: "Popular" },
+      {
+        id: "ccj-act-1",
+        name: "Sunset at Kozhikode Beach",
+        description: "Promenade walk, street snacks, and fishing harbour bustle.",
+        duration: "3h",
+        durationMinutes: 180,
+        cost: 500,
+        tag: "Popular",
+      },
+      {
+        id: "ccj-act-2",
+        name: "Malabar food trail",
+        description: "Guided evening of biryani, halwa, and coastal small plates.",
+        duration: "4h",
+        durationMinutes: 240,
+        cost: 1800,
+        tag: "Must try",
+      },
+    ],
+  },
+  chennai: {
+    slug: "chennai",
+    name: "Chennai",
+    summary:
+      "Marina mornings, filter coffee, Carnatic culture, ancient temples, and a long Bay of Bengal coastline.",
+    bestFor: "Culture, food, beaches, city breaks",
+    image:
+      "https://images.unsplash.com/photo-1582510003544-4d00b7f74220?w=800&h=500&fit=crop&q=80&auto=format",
+    imageCredit: "Raj Rana",
+    famousPlaces: [
+      "Marina Beach",
+      "Kapaleeshwarar Temple",
+      "Fort St George",
+      "San Thome Basilica",
+      "ECR drive",
+    ],
+    activities: [
+      {
+        id: "maa-act-1",
+        name: "Mylapore temple & market",
+        description: "Morning gopuram visit and flower-market lanes with coffee stops.",
+        duration: "4h",
+        durationMinutes: 240,
+        cost: 700,
+        tag: "Culture",
+      },
+      {
+        id: "maa-act-2",
+        name: "Marina walk & lighthouse",
+        description: "Long shoreline stroll and historic lighthouse area.",
+        duration: "3h",
+        durationMinutes: 180,
+        cost: 300,
+        tag: "Popular",
+      },
+    ],
+  },
+  hyderabad: {
+    slug: "hyderabad",
+    name: "Hyderabad",
+    summary:
+      "Charminar nights, Hyderabadi biryani, Golconda Fort, Ramoji Film City, and a fast-growing metro with deep Deccan roots.",
+    bestFor: "Food, history, family, long weekends",
+    image:
+      "https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=800&h=500&fit=crop&q=80&auto=format",
+    imageCredit: "Unsplash",
+    famousPlaces: [
+      "Charminar",
+      "Golconda Fort",
+      "Hussain Sagar",
+      "Qutb Shahi tombs",
+      "Laad Bazaar",
+    ],
+    activities: [
+      {
+        id: "hyd-act-1",
+        name: "Old City food walk",
+        description: "Biryani, haleem (seasonal), Irani chai, and Charminar by night.",
+        duration: "4h",
+        durationMinutes: 240,
+        cost: 1500,
+        tag: "Must try",
+      },
+      {
+        id: "hyd-act-2",
+        name: "Golconda sound & light",
+        description: "Fort exploration plus evening show when running.",
+        duration: "5h",
+        durationMinutes: 300,
+        cost: 1200,
+        tag: "History",
+      },
     ],
   },
 };

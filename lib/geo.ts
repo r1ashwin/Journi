@@ -30,12 +30,12 @@ export const destinationAirports: Record<
   rishikesh: { iata: "DED", lat: 30.1897, lng: 78.1803, cityLat: 30.0869, cityLng: 78.2676 },
   varanasi: { iata: "VNS", lat: 25.4524, lng: 82.8593, cityLat: 25.3176, cityLng: 83.0064 },
   andaman: { iata: "IXZ", lat: 11.641, lng: 92.7297, cityLat: 11.6234, cityLng: 92.7265 },
-  shimla: { iata: "SLV", lat: 31.0818, lng: 77.068, cityLat: 31.1048, cityLng: 77.1734 },
   darjeeling: { iata: "IXB", lat: 26.6812, lng: 88.3286, cityLat: 27.0361, cityLng: 88.2627 },
-  pondicherry: { iata: "PNY", lat: 11.968, lng: 79.812, cityLat: 11.9416, cityLng: 79.8083 },
   leh: { iata: "IXL", lat: 34.1359, lng: 77.5465, cityLat: 34.1526, cityLng: 77.5771 },
   amritsar: { iata: "ATQ", lat: 31.7096, lng: 74.7973, cityLat: 31.634, cityLng: 74.8723 },
-  munnar: { iata: "COK", lat: 10.152, lng: 76.4019, cityLat: 10.0889, cityLng: 77.0595 },
+  kozhikode: { iata: "CCJ", lat: 11.1368, lng: 75.9553, cityLat: 11.2588, cityLng: 75.7804 },
+  chennai: { iata: "MAA", lat: 12.9941, lng: 80.1709, cityLat: 13.0827, cityLng: 80.2707 },
+  hyderabad: { iata: "HYD", lat: 17.2403, lng: 78.4294, cityLat: 17.385, cityLng: 78.4867 },
 };
 
 export const tripAdvisorKeys: Record<DestinationSlug, string> = {
@@ -45,12 +45,12 @@ export const tripAdvisorKeys: Record<DestinationSlug, string> = {
   rishikesh: "g580106",
   varanasi: "g297685",
   andaman: "g297584",
-  shimla: "g304552",
   darjeeling: "g304557",
-  pondicherry: "g659792",
   leh: "g297625",
   amritsar: "g303884",
-  munnar: "g303881",
+  kozhikode: "g297631",
+  chennai: "g304556",
+  hyderabad: "g297586",
 };
 
 export const areaCoordinates: Record<
@@ -85,18 +85,9 @@ export const areaCoordinates: Record<
     "Aberdeen Bazaar": { lat: 11.6652, lng: 92.7376 },
     Corbyn: { lat: 11.6437, lng: 92.7216 },
   },
-  shimla: {
-    "Mall Road": { lat: 31.1037, lng: 77.1722 },
-    Kufri: { lat: 31.0962, lng: 77.2687 },
-    Jakhoo: { lat: 31.1085, lng: 77.1812 },
-  },
   darjeeling: {
     "Mall Road": { lat: 27.0425, lng: 88.2627 },
     "Chowrasta": { lat: 27.0452, lng: 88.2674 },
-  },
-  pondicherry: {
-    "White Town": { lat: 11.934, lng: 79.8366 },
-    Auroville: { lat: 12.0071, lng: 79.8107 },
   },
   leh: {
     "Main Bazaar": { lat: 34.163, lng: 77.585 },
@@ -106,9 +97,20 @@ export const areaCoordinates: Record<
     "Golden Temple": { lat: 31.62, lng: 74.8765 },
     "Lawrence Road": { lat: 31.6332, lng: 74.8651 },
   },
-  munnar: {
-    "Munnar Town": { lat: 10.0889, lng: 77.0595 },
-    Devikulam: { lat: 10.0589, lng: 77.1037 },
+  kozhikode: {
+    "Beach Road": { lat: 11.2588, lng: 75.7804 },
+    "Mananchira": { lat: 11.25, lng: 75.78 },
+    Beypore: { lat: 11.171, lng: 75.806 },
+  },
+  chennai: {
+    "Marina & Mylapore": { lat: 13.0368, lng: 80.2676 },
+    "T Nagar": { lat: 13.0418, lng: 80.2341 },
+    ECR: { lat: 12.9147, lng: 80.251 },
+  },
+  hyderabad: {
+    Banjara: { lat: 17.4065, lng: 78.4772 },
+    "Old City": { lat: 17.3616, lng: 78.4747 },
+    Hitech: { lat: 17.4474, lng: 78.3762 },
   },
 };
 

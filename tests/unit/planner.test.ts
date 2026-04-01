@@ -1,3 +1,4 @@
+import { assertAllRoutesHaveDirectCurated } from "@/lib/curated-direct-flights";
 import {
   buildShareQuery,
   calculatePlanTotals,
@@ -114,6 +115,9 @@ describe("planner utilities", () => {
     const decoded = decodePlan(encoded);
     expect(decoded).not.toBeNull();
     expect(decoded!.basics.destination).toBe("goa");
+
+    const viaQuery = decodePlan(encodeURIComponent(encoded));
+    expect(viaQuery?.total).toBe(22750);
     expect(decoded!.total).toBe(22750);
     expect(decoded!.outbound?.label).toBe("Morning nonstop");
     expect(decoded!.stay?.name).toBe("Candolim Coast Stay");
@@ -123,5 +127,9 @@ describe("planner utilities", () => {
   it("decodePlan returns null for garbage input", () => {
     expect(decodePlan("not-valid-base64!!!")).toBeNull();
     expect(decodePlan("")).toBeNull();
+  });
+
+  it("every supported source and destination has curated nonstop flight fallbacks", () => {
+    expect(() => assertAllRoutesHaveDirectCurated()).not.toThrow();
   });
 });
